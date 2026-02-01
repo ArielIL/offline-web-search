@@ -65,3 +65,4 @@ data/
 library.xml
 library_test.xml
 kiwix-tools*/
+dist/
