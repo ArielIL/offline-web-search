@@ -57,3 +57,11 @@ mcp_config.json
 
 # Claude artifacts
 .claude/
+
+# Project Specific
+data/
+*.sqlite
+*.zim
+library.xml
+library_test.xml
+kiwix-tools*/
