@@ -15,11 +15,11 @@ mcp = FastMCP("offline-search-client")
 @mcp.tool()
 async def google_search(query: str) -> str:
     """
-    Search the offline documentation library.
-    Returns a list of results with titles and snippets.
+    Performs a full-text search across the offline documentation library (Remote Mode).
+    Use this tool whenever you need to look up documentation, API references, or technical guides.
     
     Args:
-        query: The search text query.
+        query: The search keywords (e.g., 'python 3.11 features').
     """
     try:
         async with httpx.AsyncClient() as client:

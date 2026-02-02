@@ -144,11 +144,13 @@ async def search_local_index(query: str, limit: int = 10) -> list[tuple[str, str
 @mcp.tool()
 async def google_search(query: str) -> str:
     """
-    Search the offline documentation library using Kiwix.
-    Returns a list of results with titles and snippets.
+    Performs a full-text search across the offline documentation library.
+    Use this tool whenever you need to look up documentation, API references, or technical guides regarding Python, programming, or any other topic present in the local library.
+    
+    This tool is your primary source of external information since you do not have internet access.
     
     Args:
-        query: The search text query.
+        query: The search keywords. Try to be specific (e.g., 'python 3.11 new features', 'sqlite fts5 syntax').
     """
     # Uses 'pattern' for text search across the library or within books
     search_url = f"{KIWIX_URL}/search?pattern={urllib.parse.quote(query)}"
