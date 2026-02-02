@@ -38,7 +38,11 @@ def iter_articles(zim_path: Path, limit: int | None = None) -> Iterable[dict[str
             if not text:
                 continue
 
-            title = entry.get("title") or soup.title.string.strip() if soup.title else entry.get("url")
+            title = entry.get("title")
+            if not title and soup.title:
+                title = soup.title.get_text(strip=True)
+            if not title:
+                title = entry.get("url")
 
             yield {
                 "namespace": namespace,
@@ -73,9 +77,10 @@ def prepare_database(db_path: Path, reset: bool) -> sqlite3.Connection:
     return conn
 
 
-def index_zim(conn: sqlite3.Connection, zim_path: Path, zim_name: str, limit: Optional[int]) -> int:
+def index_zim(conn: sqlite3.Connection, zim_path: Path, zim_name: str, limit: int | None) -> int:
     inserted = 0
     cursor = conn.cursor()
+    print(f"Indexing {zim_name}...")
     for article in iter_articles(zim_path, limit=limit):
         cursor.execute(
             "INSERT INTO documents (title, content, zim_name, namespace, url) VALUES (?, ?, ?, ?, ?)",
@@ -93,11 +98,16 @@ def index_zim(conn: sqlite3.Connection, zim_path: Path, zim_name: str, limit: Op
             (docid, str(zim_path)),
         )
         inserted += 1
+        if inserted % 100 == 0:
+            print(f"\rIndexed {inserted} articles...", end="", flush=True)
+            conn.commit()
+    
+    print(f"\rIndexed {inserted} articles. Done.   ")
     conn.commit()
     return inserted
 
 
-def load_library(library_path: Path) -> Iterable[Dict[str, Any]]:
+def load_library(library_path: Path) -> Iterable[dict[str, Any]]:
     tree = ElementTree.parse(library_path)
     root = tree.getroot()
     library_dir = library_path.parent
