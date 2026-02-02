@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple
+from typing import Any
 import asyncio
 import sqlite3
 from pathlib import Path
@@ -51,7 +51,7 @@ def start_kiwix_server():
         print(f"Failed to start Kiwix server: {e}")
 
 
-def _search_local_index_sync(query: str, limit: int = 10) -> List[Tuple[str, str, str]]:
+def _search_local_index_sync(query: str, limit: int = 10) -> list[tuple[str, str, str]]:
     if not LOCAL_INDEX_DB.exists():
         return []
 
@@ -74,7 +74,8 @@ def _search_local_index_sync(query: str, limit: int = 10) -> List[Tuple[str, str
     if not terms:
         return []
 
-    safe_query = " ".join(f'"{term.replace("\"", "\"\"")}"' for term in terms)
+    safe_terms = [f'"{term.replace("\"", "\"\"")}"' for term in terms]
+    safe_query = " ".join(safe_terms)
 
     conn = sqlite3.connect(LOCAL_INDEX_DB)
     conn.row_factory = sqlite3.Row
@@ -137,7 +138,7 @@ def _search_local_index_sync(query: str, limit: int = 10) -> List[Tuple[str, str
         conn.close()
 
 
-async def search_local_index(query: str, limit: int = 10) -> List[Tuple[str, str, str]]:
+async def search_local_index(query: str, limit: int = 10) -> list[tuple[str, str, str]]:
     return await asyncio.to_thread(_search_local_index_sync, query, limit)
 
 @mcp.tool()

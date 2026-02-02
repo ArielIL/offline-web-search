@@ -18,7 +18,7 @@ Run the crawler to extract text from your ZIM library into a local database.
 Set-Location C:\Users\relz6\Documents\repos\offline-search
 
 # Build index (Indexing 27k articles takes ~10-15 mins)
-C:\Python314\python.exe build_local_index.py --library D:\Downloads\library.xml --output data\offline_index.sqlite
+python build_local_index.py --library D:\Downloads\library.xml --output data\offline_index.sqlite
 ```
 *Tip: Add `--limit 50` to the end of the command for a quick 1-minute test.*
 
@@ -35,7 +35,7 @@ Add this to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.
 {
   "mcpServers": {
     "offline-search": {
-      "command": "C:\\Python314\\python.exe",
+      "command": "python",
       "args": ["C:\\Users\\relz6\\Documents\\repos\\offline-search\\offline_search_adapter.py"]
     }
   }
@@ -65,7 +65,7 @@ Start-Process -FilePath "D:\Downloads\kiwix-tools_win-i686-3.7.0-2\kiwix-serve.e
 ```powershell
 # Serves search results on Port 8082
 Set-Location C:\Users\relz6\Documents\repos\offline-search
-Start-Process -FilePath "C:\Python314\python.exe" -ArgumentList "search_server.py" -WindowStyle Hidden
+Start-Process -FilePath "python" -ArgumentList "search_server.py" -WindowStyle Hidden
 ```
 
 #### Client Side (The machine with Claude)
@@ -97,7 +97,7 @@ Add this to the laptop's Claude config:
 Run this manual script to see if the search returns results:
 ```powershell
 Set-Location C:\Users\relz6\Documents\repos\offline-search
-C:\Python314\python.exe test_search.py "python"
+python test_search.py "python"
 ```
 
 ### Check if it's working (Remote)
