@@ -56,7 +56,8 @@ def search_index(query, limit):
     if not terms and raw_terms: terms = raw_terms
     if not terms: return []
 
-    safe_query = " ".join(f'"{term.replace("\"", "\"\"")}"' for term in terms)
+    safe_terms = [f'"{term.replace("\"", "\"\"")}"' for term in terms]
+    safe_query = " ".join(safe_terms)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
