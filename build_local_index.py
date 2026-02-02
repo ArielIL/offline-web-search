@@ -2,7 +2,8 @@ import argparse
 import sqlite3
 from pathlib import Path
 from xml.etree import ElementTree
-from typing import Iterable, Optional, Dict, Any
+from collections.abc import Iterable
+from typing import Any
 
 from bs4 import BeautifulSoup
 from zimply.zimply import ZIMFile
@@ -12,7 +13,7 @@ DEFAULT_OUTPUT = Path("data/offline_index.sqlite")
 TEXT_NAMESPACES = {"A", "C"}
 
 
-def iter_articles(zim_path: Path, limit: Optional[int] = None) -> Iterable[Dict[str, Any]]:
+def iter_articles(zim_path: Path, limit: int | None = None) -> Iterable[dict[str, Any]]:
     zim = ZIMFile(str(zim_path), "utf-8")
     processed = 0
     try:

@@ -13,6 +13,7 @@ This project provides a Model Context Protocol (MCP) server that allows AI agent
 ## Quick Start
 
 ### 1. Installation
+**Requirements:** Python 3.11+
 ```bash
 pip install -r requirements.txt
 ```

@@ -19,6 +19,7 @@ Copy-Item "add_external_source.py" -Destination $serverDir
 Copy-Item "requirements.txt" -Destination $serverDir
 Copy-Item "DEPLOYMENT.md" -Destination $serverDir
 Copy-Item "README.md" -Destination $serverDir
+Copy-Item ".python-version" -Destination $serverDir
 
 # Check for Data
 if (Test-Path "data\offline_index.sqlite") {
@@ -34,6 +35,7 @@ Write-Host "Packaging Client..."
 Copy-Item "client_mcp_adapter.py" -Destination $clientDir
 Copy-Item "requirements.txt" -Destination $clientDir
 Copy-Item "README.md" -Destination $clientDir
+Copy-Item ".python-version" -Destination $clientDir
 
 # 4. Attempt to Copy External Dependencies (Kiwix)
 # Helper to copy external tools if they exist at known locations
