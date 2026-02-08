@@ -8,7 +8,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 from zimply.zimply import ZIMFile
 
-DEFAULT_LIBRARY = Path(r"D:\Downloads\library.xml")
+DEFAULT_LIBRARY = Path("library.xml")
 DEFAULT_OUTPUT = Path("data/offline_index.sqlite")
 TEXT_NAMESPACES = {"A", "C"}
 

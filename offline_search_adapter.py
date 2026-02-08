@@ -9,12 +9,45 @@ import urllib.parse
 import subprocess
 import socket
 import time
+import platform
+import shutil
+import os
 
 # Initialize FastMCP server
 mcp = FastMCP("offline-search")
 
-KIWIX_EXE = r"D:\\Downloads\\kiwix-tools_win-i686-3.7.0-2\\kiwix-serve.exe"
-LIBRARY_XML = str(Path(__file__).resolve().parent / "library_test.xml")
+# --- Configuration & Path Detection ---
+BASE_DIR = Path(__file__).resolve().parent
+IS_WINDOWS = platform.system() == "Windows"
+
+# 1. Locate Kiwix Server
+KIWIX_BIN_NAME = "kiwix-serve.exe" if IS_WINDOWS else "kiwix-serve"
+
+# Priority: 1. Local 'kiwix-tools' folder (dist mode), 2. System PATH, 3. Dev Hardcode
+KIWIX_EXE = None
+local_tool = BASE_DIR / "kiwix-tools" / KIWIX_BIN_NAME
+
+if local_tool.exists():
+    KIWIX_EXE = str(local_tool)
+elif shutil.which("kiwix-serve"):
+    KIWIX_EXE = "kiwix-serve"
+elif IS_WINDOWS:
+    # Dev fallback
+    dev_path = Path(r"D:\Downloads\kiwix-tools_win-i686-3.7.0-2\kiwix-serve.exe")
+    if dev_path.exists():
+        KIWIX_EXE = str(dev_path)
+
+if not KIWIX_EXE:
+    print("Warning: kiwix-serve executable not found. Search will fail unless configured.")
+    KIWIX_EXE = "kiwix-serve" # Hope for the best
+
+# 2. Locate Library
+# Try 'library.xml' in current folder first, then fallback to test
+if (BASE_DIR / "library.xml").exists():
+    LIBRARY_XML = str(BASE_DIR / "library.xml")
+else:
+    LIBRARY_XML = str(BASE_DIR / "library_test.xml")
+
 KIWIX_PORT = 8081
 KIWIX_URL = f"http://127.0.0.1:{KIWIX_PORT}"
 LOCAL_INDEX_DB = Path(__file__).resolve().parent / "data" / "offline_index.sqlite"

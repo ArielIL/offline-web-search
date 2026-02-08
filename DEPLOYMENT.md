@@ -68,6 +68,15 @@ Set-Location C:\Users\relz6\Documents\repos\offline-search
 Start-Process -FilePath "python" -ArgumentList "search_server.py" -WindowStyle Hidden
 ```
 
+#### Server Side (Linux/Ubuntu)
+1.  **Install Kiwix Tools**: Download the Linux x86_64 version from [kiwix.org](https://download.kiwix.org/release/kiwix-tools/) and extract the binary named `kiwix-serve` into the `dist/server/kiwix-tools/` folder.
+2.  **Run the script**:
+    ```bash
+    cd dist/server
+    chmod +x start_server.sh
+    ./start_server.sh
+    ```
+
 #### Client Side (The machine with Claude)
 **1. Configure Connection**
 Edit `client_mcp_adapter.py` on your laptop and set the Server IP:

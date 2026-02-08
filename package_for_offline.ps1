@@ -71,6 +71,31 @@ python search_server.py
 "@
 Set-Content -Path "$serverDir\start_server.bat" -Value $serverStartScript
 
+# 6. Create Start Script for Linux
+$linuxStartScript = @"
+#!/bin/bash
+# Start Kiwix Serve in background
+echo "Starting Kiwix Serve..."
+if [ -f "kiwix-tools/kiwix-serve" ]; then
+    chmod +x kiwix-tools/kiwix-serve
+    ./kiwix-tools/kiwix-serve --port 8081 --library library.xml &
+else
+    echo "Kiwix executable not found in ./kiwix-tools/. Assuming it is in PATH..."
+    kiwix-serve --port 8081 --library library.xml &
+fi
+KIWIX_PID=$!
+
+# Start Search API
+echo "Starting Search Server..."
+python3 search_server.py &
+SEARCH_PID=$!
+
+echo "Server running. Press Ctrl+C to stop."
+wait \$KIWIX_PID \$SEARCH_PID
+"@
+# Write with Unix Line Endings (LF)
+[IO.File]::WriteAllText("$serverDir\start_server.sh", $linuxStartScript.Replace("`r`n", "`n"))
+
 Write-Host "`nPackaging Complete!"
 Write-Host "Server package: $serverDir"
 Write-Host "Client package: $clientDir"
