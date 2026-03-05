@@ -10,14 +10,21 @@ It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Ov
 
 ```mermaid
 graph LR
-    A[Claude Desktop / Claude Code] -->|MCP| B[mcp.py]
-    B -->|local mode| C[search_engine.py]
-    C --> D[(SQLite FTS5)]
-    B -->|local mode| E[kiwix-serve :8081]
+    subgraph "Option A: Claude Code Skill"
+        CC1[Claude Code] -->|Bash| S1[scripts/search.py]
+        CC1 -->|Bash| S2[scripts/fetch_page.py]
+        S1 --> SE[search_engine.py]
+        S2 --> K1[kiwix-serve]
+    end
 
-    B -->|remote mode| H[server.py :8082]
-    H --> C
-    B -->|remote mode| E
+    subgraph "Option B: MCP Server"
+        CC2[Claude Desktop / Code] -->|MCP| M[mcp.py]
+        M -->|local| SE
+        M -->|local| K1
+        M -->|remote| API[server.py :8082]
+    end
+
+    SE --> DB[(SQLite FTS5)]
 ```
 
 ## Features
@@ -45,13 +52,23 @@ offline-search-index --library path/to/library.xml --output data/offline_index.s
 
 ### 3. Use with Claude Code (Recommended)
 
+**Option A: Skill** (no background server needed)
+
 ```bash
-# Register as a Claude Code skill
-./scripts/install_claude_code.sh     # Linux/macOS
-.\scripts\install_claude_code.ps1    # Windows
+./scripts/install_claude_code.sh skill     # Linux/macOS
+.\scripts\install_claude_code.ps1 skill    # Windows
 ```
 
-Then start Claude Code anywhere — it will have `google_search` and `visit_page` tools available.
+This copies the skill to `~/.claude/skills/offline-search/`. Claude Code will auto-trigger it when it needs to search documentation, or you can invoke it directly with `/offline-search <query>`.
+
+**Option B: MCP server**
+
+```bash
+./scripts/install_claude_code.sh mcp       # Linux/macOS
+.\scripts\install_claude_code.ps1 mcp      # Windows
+```
+
+Registers an MCP server that exposes `google_search` and `visit_page` tools.
 
 ### 4. Use with Claude Desktop
 
@@ -81,8 +98,14 @@ src/offline_search/
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP API + content management endpoints
 
+.claude/skills/offline-search/
+├── SKILL.md           # Claude Code skill definition
+└── scripts/
+    ├── search.py      # CLI: search the index, print results
+    └── fetch_page.py  # CLI: fetch a page, print Markdown
+
 tests/                 # pytest test suite
-scripts/               # Installation helpers for Claude Code
+scripts/               # Installation helpers (skill or MCP)
 ```
 
 ## MCP Tools

@@ -20,6 +20,10 @@ src/offline_search/
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP search API + content management
+
+.claude/skills/offline-search/
+├── SKILL.md           # Claude Code skill (search docs via Bash scripts)
+└── scripts/           # search.py + fetch_page.py CLI wrappers
 ```
 
 ## Key Commands

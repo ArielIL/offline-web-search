@@ -30,18 +30,54 @@ offline-search-index --library path/to/library.xml --output data/offline_index.s
 
 ## 🟦 Phase 2: Choose Your Deployment Mode
 
-### Option A: Claude Code CLI Skill ⭐ (Recommended)
+### Option A: Claude Code Skill ⭐ (Recommended)
 
-*Use this if:* You use the **Claude Code** terminal-based tool.
+*Use this if:* You use the **Claude Code** terminal-based tool and prefer a lightweight setup with no background server.
 
 **1. Quick Install**
 
 ```bash
 # Linux / macOS
-./scripts/install_claude_code.sh
+./scripts/install_claude_code.sh skill
 
 # Windows (PowerShell)
-.\scripts\install_claude_code.ps1
+.\scripts\install_claude_code.ps1 skill
+```
+
+This copies the skill to `~/.claude/skills/offline-search/`.
+
+**2. Manual Install**
+
+```bash
+# Copy the skill directory to your personal skills folder
+cp -r .claude/skills/offline-search ~/.claude/skills/offline-search
+```
+
+Or on Windows:
+```powershell
+Copy-Item -Recurse .claude\skills\offline-search $env:USERPROFILE\.claude\skills\offline-search
+```
+
+**3. What you get**
+
+- `/offline-search <query>` — invoke directly from Claude Code
+- Auto-triggers when Claude needs to look up documentation
+- No background MCP server process; scripts run on demand via Bash
+
+---
+
+### Option A′: Claude Code via MCP Server
+
+*Use this if:* You prefer the MCP approach or need `google_search`/`visit_page` as named tools.
+
+**1. Quick Install**
+
+```bash
+# Linux / macOS
+./scripts/install_claude_code.sh mcp
+
+# Windows (PowerShell)
+.\scripts\install_claude_code.ps1 mcp
 ```
 
 **2. Manual Install**
@@ -52,7 +88,7 @@ claude mcp add offline-search -- python -m offline_search.mcp
 
 **3. What you get**
 
-After registration, Claude Code has two new tools everywhere:
+Claude Code gets two MCP tools everywhere:
 - `google_search(query)` — full-text search across offline docs
 - `visit_page(url)` — read the full content of any result
 

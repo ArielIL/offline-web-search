@@ -170,3 +170,85 @@ class TestSearchResult:
         d = r.to_dict()
         assert d["title"] == "T"
         assert d["score"] == -1.5
+
+    def test_format_for_llm_no_snippet(self):
+        """When snippet is empty, format_for_llm should say 'No preview available.'."""
+        r = SearchResult(
+            title="Blank", url="u", snippet="", zim_name="z", namespace="A",
+        )
+        text = r.format_for_llm("http://localhost:8081")
+        assert "No preview available." in text
+
+    def test_format_full_url_empty_namespace(self):
+        """Empty namespace should default to 'A'."""
+        r = SearchResult(
+            title="T", url="docs/page", snippet="s", zim_name="z", namespace="",
+        )
+        full = r.format_full_url("http://localhost:8081")
+        assert "/A/" in full
+
+    def test_url_with_special_chars_encoded(self):
+        """URLs with spaces or special chars should be safely encoded."""
+        r = SearchResult(
+            title="T", url="docs/my page.html", snippet="s",
+            zim_name="z", namespace="A",
+        )
+        full = r.format_full_url("http://localhost:8081")
+        assert "my%20page.html" in full
+        assert full.startswith("http://localhost:8081/content/z/A/")
+
+
+# ── Async wrapper ──────────────────────────────────────────────────
+
+class TestSearchAsync:
+    async def test_async_search_delegates_to_sync(self, tmp_db):
+        """The async ``search()`` wrapper should return the same results as sync."""
+        from offline_search.search_engine import search
+
+        sync_results = search_sync("python", db_path=tmp_db)
+        async_results = await search("python", db_path=tmp_db)
+        assert len(async_results) == len(sync_results)
+        assert [r.title for r in async_results] == [r.title for r in sync_results]
+
+    async def test_async_search_no_results(self, tmp_path):
+        from offline_search.search_engine import search
+
+        results = await search("python", db_path=tmp_path / "nonexistent.db")
+        assert results == []
+
+
+# ── Edge cases / error branches ────────────────────────────────────
+
+class TestSearchEdgeCases:
+    def test_corrupt_db_returns_empty(self, tmp_path):
+        """A non-SQLite file at db_path should not crash."""
+        fake_db = tmp_path / "bad.sqlite"
+        fake_db.write_text("this is not a database")
+        results = search_sync("python", db_path=fake_db)
+        assert results == []
+
+    def test_all_results_blacklisted(self, tmp_db):
+        """Searching for a term that only matches blacklisted URLs → empty."""
+        results = search_sync("analytics tracking", db_path=tmp_db)
+        urls = [r.url for r in results]
+        assert not any("analytics.python.org" in u for u in urls)
+
+    def test_unicode_query(self, tmp_db):
+        """Unicode characters in the query should not crash."""
+        results = search_sync("données françaises 日本語", db_path=tmp_db)
+        assert isinstance(results, list)  # may be empty, but should not raise
+
+    def test_special_fts5_chars_in_query(self, tmp_db):
+        """FTS5 special characters should be handled gracefully."""
+        results = search_sync('python "asyncio" OR NOT', db_path=tmp_db)
+        assert isinstance(results, list)
+
+    def test_whitespace_only_query(self, tmp_db):
+        """A whitespace-only query should short-circuit to empty list."""
+        results = search_sync("   ", db_path=tmp_db)
+        assert results == []
+
+    def test_stop_words_only_still_returns(self, tmp_db):
+        """Query with only stop words should still attempt search (fallback)."""
+        results = search_sync("the is a", db_path=tmp_db)
+        assert isinstance(results, list)
