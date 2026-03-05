@@ -1,3 +1,6 @@
 """Offline Search — drop-in replacement for web search in air-gapped environments."""
 
-__version__ = "1.0.0"
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0+unknown"  # Fallback for editable installs without VCS

@@ -1,15 +1,28 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "offline-search"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Offline documentation search engine exposed via MCP — a drop-in replacement for web search tools in air-gapped environments."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Offline Search Contributors" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Documentation",
+    "Topic :: Text Processing :: Indexing",
+]
+keywords = ["mcp", "offline", "search", "kiwix", "zim", "documentation", "claude", "ai"]
 
 dependencies = [
     "mcp>=1.0.0",
@@ -22,6 +35,11 @@ dependencies = [
     "uvicorn>=0.29.0",
     "markdownify>=0.14.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/relz6/offline-search"
+Repository = "https://github.com/relz6/offline-search"
+Issues = "https://github.com/relz6/offline-search/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -40,6 +58,12 @@ offline-search-index   = "offline_search.indexer:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/offline_search"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/offline_search/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
