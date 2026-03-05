@@ -15,16 +15,16 @@ class TestSettings:
 
     def test_kiwix_url_local_mode(self):
         """In local mode, kiwix_url derives from kiwix_port."""
-        s = Settings(kiwix_port=9999)
+        s = Settings(mode="local", kiwix_port=9999)
         assert s.kiwix_url == "http://127.0.0.1:9999"
 
     def test_kiwix_url_remote_mode(self):
         """In remote mode, kiwix_url derives from remote_host + remote_kiwix_port."""
-        s = Settings(remote_host="10.0.0.5", remote_kiwix_port=6000)
+        s = Settings(mode="remote", remote_host="10.0.0.5", remote_kiwix_port=6000)
         assert s.kiwix_url == "http://10.0.0.5:6000"
 
     def test_remote_urls(self):
-        s = Settings(remote_host="10.0.0.5", remote_search_port=5000, remote_kiwix_port=6000)
+        s = Settings(mode="remote", remote_host="10.0.0.5", remote_search_port=5000, remote_kiwix_port=6000)
         assert s.remote_search_url == "http://10.0.0.5:5000"
         assert s.remote_kiwix_url == "http://10.0.0.5:6000"
 
