@@ -3,6 +3,19 @@
 Values are loaded from environment variables, a ``.env`` file, or fall back
 to sensible defaults.  Every other module imports from here instead of
 hard-coding its own constants.
+
+Mode detection
+--------------
+The ``mode`` field controls how the MCP server operates:
+
+* ``"local"`` (default) — searches the local SQLite FTS5 index and manages a
+  local kiwix-serve process.
+* ``"remote"`` — proxies search and page-fetch requests to a remote HTTP API
+  + Kiwix server over the network.
+
+When ``mode`` is left blank the system **auto-detects**: if ``remote_host`` is
+set to anything other than ``127.0.0.1`` / ``localhost``, mode is ``"remote"``;
+otherwise ``"local"``.
 """
 
 from __future__ import annotations
@@ -10,7 +23,6 @@ from __future__ import annotations
 import platform
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -53,8 +65,15 @@ def _detect_library_xml() -> str:
     return str(base / "library.xml")
 
 
+_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", ""}
+
+
 class Settings(BaseSettings):
-    """Application settings with env-var / ``.env`` overrides."""
+    """Application settings with env-var / ``.env`` overrides.
+
+    Set ``OFFLINE_SEARCH_MODE=remote`` (or just ``OFFLINE_SEARCH_REMOTE_HOST``
+    to a non-localhost value) to switch to remote/distributed mode.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="OFFLINE_SEARCH_",
@@ -62,6 +81,9 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    # --- Mode (auto-detected if blank) ---
+    mode: str = ""  # "local" or "remote"; blank = auto-detect
 
     # --- Paths ---
     base_dir: Path = _detect_base_dir()
@@ -71,13 +93,12 @@ class Settings(BaseSettings):
     # --- Kiwix ---
     kiwix_exe: str = _detect_kiwix_exe()
     kiwix_port: int = 8081
-    kiwix_url: str = ""  # computed in model_post_init
 
     # --- Search API server ---
     server_host: str = "0.0.0.0"
     server_port: int = 8082
 
-    # --- Remote mode (client adapter) ---
+    # --- Remote mode ---
     remote_host: str = "127.0.0.1"
     remote_search_port: int = 8082
     remote_kiwix_port: int = 8081
@@ -88,14 +109,42 @@ class Settings(BaseSettings):
     snippet_tokens: int = 16
 
     def model_post_init(self, __context: object) -> None:
-        if not self.kiwix_url:
-            self.kiwix_url = f"http://127.0.0.1:{self.kiwix_port}"
+        # Auto-detect mode when not explicitly set
+        if not self.mode:
+            if self.remote_host in _LOCAL_HOSTS:
+                self.mode = "local"
+            else:
+                self.mode = "remote"
 
     # Convenience helpers -------------------------------------------------------
 
     @property
-    def remote_search_url(self) -> str:
+    def is_local(self) -> bool:
+        """True when running in local / all-in-one mode."""
+        return self.mode == "local"
+
+    @property
+    def is_remote(self) -> bool:
+        """True when running as a thin proxy to a remote server."""
+        return self.mode == "remote"
+
+    @property
+    def kiwix_url(self) -> str:
+        """Base URL of the Kiwix server (local or remote)."""
+        if self.is_remote:
+            return f"http://{self.remote_host}:{self.remote_kiwix_port}"
+        return f"http://127.0.0.1:{self.kiwix_port}"
+
+    @property
+    def search_api_url(self) -> str:
+        """Base URL of the HTTP search API (only meaningful in remote mode)."""
         return f"http://{self.remote_host}:{self.remote_search_port}"
+
+    # Legacy aliases for backwards compatibility --------------------------------
+
+    @property
+    def remote_search_url(self) -> str:
+        return self.search_api_url
 
     @property
     def remote_kiwix_url(self) -> str:

@@ -21,7 +21,7 @@ fi
 
 # Register the MCP server
 echo "Registering offline-search MCP server with Claude Code..."
-claude mcp add offline-search -- python -m offline_search.mcp_local
+claude mcp add offline-search -- python -m offline_search.mcp
 
 echo ""
 echo "[OK] 'offline-search' skill added to Claude Code!"

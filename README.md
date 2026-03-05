@@ -10,15 +10,14 @@ It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Ov
 
 ```mermaid
 graph LR
-    A[Claude Desktop / Claude Code] -->|MCP| B[mcp_local.py]
-    B --> C[search_engine.py]
+    A[Claude Desktop / Claude Code] -->|MCP| B[mcp.py]
+    B -->|local mode| C[search_engine.py]
     C --> D[(SQLite FTS5)]
-    B --> E[kiwix-serve :8081]
+    B -->|local mode| E[kiwix-serve :8081]
 
-    F[Claude on laptop] -->|MCP| G[mcp_client.py]
-    G -->|HTTP| H[server.py :8082]
+    B -->|remote mode| H[server.py :8082]
     H --> C
-    G -->|HTTP| E
+    B -->|remote mode| E
 ```
 
 ## Features
@@ -63,7 +62,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   "mcpServers": {
     "offline-search": {
       "command": "python",
-      "args": ["-m", "offline_search.mcp_local"]
+      "args": ["-m", "offline_search.mcp"]
     }
   }
 }
@@ -79,8 +78,7 @@ src/offline_search/
 ├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
 ├── kiwix.py           # Kiwix-serve lifecycle + page fetching → Markdown
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
-├── mcp_local.py       # MCP server — local/all-in-one mode
-├── mcp_client.py      # MCP client adapter — remote/distributed mode
+├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP API + content management endpoints
 
 tests/                 # pytest test suite
@@ -113,10 +111,11 @@ All settings support environment variable overrides (prefix: `OFFLINE_SEARCH_`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `OFFLINE_SEARCH_MODE` | auto-detect | `local` or `remote` (auto-detects from `REMOTE_HOST`) |
 | `OFFLINE_SEARCH_DB_PATH` | `data/offline_index.sqlite` | FTS5 index path |
 | `OFFLINE_SEARCH_KIWIX_PORT` | `8081` | Kiwix-serve port |
 | `OFFLINE_SEARCH_SERVER_PORT` | `8082` | HTTP API port |
-| `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for distributed mode |
+| `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for remote mode |
 
 Or create a `.env` file at the project root.
 

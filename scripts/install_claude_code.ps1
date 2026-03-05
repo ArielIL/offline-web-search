@@ -26,7 +26,7 @@ if (-not (Get-Command "claude" -ErrorAction SilentlyContinue)) {
 
 # Register the MCP server
 Write-Host "Registering offline-search MCP server with Claude Code..."
-claude mcp add offline-search -- python -m offline_search.mcp_local
+claude mcp add offline-search -- python -m offline_search.mcp
 
 Write-Host ""
 Write-Host "[OK] 'offline-search' skill added to Claude Code!" -ForegroundColor Green

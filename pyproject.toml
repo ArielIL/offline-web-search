@@ -51,8 +51,7 @@ dev = [
 ]
 
 [project.scripts]
-offline-search-mcp     = "offline_search.mcp_local:main"
-offline-search-client  = "offline_search.mcp_client:main"
+offline-search-mcp     = "offline_search.mcp:main"
 offline-search-server  = "offline_search.server:main"
 offline-search-index   = "offline_search.indexer:main"
 

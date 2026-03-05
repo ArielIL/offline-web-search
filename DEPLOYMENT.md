@@ -47,7 +47,7 @@ offline-search-index --library path/to/library.xml --output data/offline_index.s
 **2. Manual Install**
 
 ```bash
-claude mcp add offline-search -- python -m offline_search.mcp_local
+claude mcp add offline-search -- python -m offline_search.mcp
 ```
 
 **3. What you get**
@@ -71,7 +71,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
   "mcpServers": {
     "offline-search": {
       "command": "python",
-      "args": ["-m", "offline_search.mcp_local"]
+      "args": ["-m", "offline_search.mcp"]
     }
   }
 }
@@ -125,7 +125,12 @@ OFFLINE_SEARCH_REMOTE_KIWIX_PORT=8081
 
 For Claude Code:
 ```bash
-claude mcp add offline-search -- python -m offline_search.mcp_client
+OFFLINE_SEARCH_REMOTE_HOST=192.168.1.50 claude mcp add offline-search -- python -m offline_search.mcp
+```
+
+Or set the env var permanently and register:
+```bash
+claude mcp add offline-search -- python -m offline_search.mcp
 ```
 
 For Claude Desktop, add to config:
@@ -134,7 +139,7 @@ For Claude Desktop, add to config:
   "mcpServers": {
     "offline-search": {
       "command": "python",
-      "args": ["-m", "offline_search.mcp_client"]
+      "args": ["-m", "offline_search.mcp"]
     }
   }
 }
