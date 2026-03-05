@@ -1,98 +1,140 @@
 # Offline Search Deployment Guide
 
-This repository supports two deployment modes for offline ZIM searching:
-1.  **Local (All-in-One):** Everything runs on the same machine as Claude.
-2.  **Remote (Distributed):** Heavy ZIM files stay on a central server; Claude connects via a lightweight adapter.
+This repository supports three deployment modes:
+
+1.  **Claude Code Skill** — Fastest setup. Claude Code CLI gets `google_search` + `visit_page` tools.
+2.  **Claude Desktop (Local MCP)** — All-in-one mode for the Claude Desktop app.
+3.  **Distributed (Remote)** — Heavy ZIM files on a server; Claude connects over the network.
 
 ---
 
-## 🟥 Phase 1: Preparation (Required for BOTH modes)
+## 🟥 Phase 1: Installation (Required for ALL modes)
 
-Before deploying, you must build the search index on the machine that holds the `.zim` files.
+### 1. Install the Package
 
-### 1. Build the SQLite Index
-Run the crawler to extract text from your ZIM library into a local database.
-
-```powershell
-# Go to project root
-Set-Location C:\Users\relz6\Documents\repos\offline-search
-
-# Build index (Indexing 27k articles takes ~10-15 mins)
-python build_local_index.py --library D:\Downloads\library.xml --output data\offline_index.sqlite
+```bash
+pip install -e ".[dev]"
 ```
-*Tip: Add `--limit 50` to the end of the command for a quick 1-minute test.*
+
+### 2. Build the SQLite Index
+
+Run the indexer to extract text from your ZIM library:
+
+```bash
+offline-search-index --library path/to/library.xml --output data/offline_index.sqlite
+```
+
+*Tip: Add `--limit 50` for a quick 1-minute test run.*
 
 ---
 
 ## 🟦 Phase 2: Choose Your Deployment Mode
 
-### Option A: Local Mode (All-in-One)
-*Use this if:* Claude and the ZIM files are on the **same** computer.
+### Option A: Claude Code CLI Skill ⭐ (Recommended)
 
-**1. Configure Claude**
-Add this to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`):
+*Use this if:* You use the **Claude Code** terminal-based tool.
+
+**1. Quick Install**
+
+```bash
+# Linux / macOS
+./scripts/install_claude_code.sh
+
+# Windows (PowerShell)
+.\scripts\install_claude_code.ps1
+```
+
+**2. Manual Install**
+
+```bash
+claude mcp add offline-search -- python -m offline_search.mcp_local
+```
+
+**3. What you get**
+
+After registration, Claude Code has two new tools everywhere:
+- `google_search(query)` — full-text search across offline docs
+- `visit_page(url)` — read the full content of any result
+
+---
+
+### Option B: Claude Desktop (Local / All-in-One)
+
+*Use this if:* Claude Desktop and ZIM files are on the **same** computer.
+
+**1. Configure Claude Desktop**
+
+Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
     "offline-search": {
       "command": "python",
-      "args": ["C:\\Users\\relz6\\Documents\\repos\\offline-search\\offline_search_adapter.py"]
+      "args": ["-m", "offline_search.mcp_local"]
     }
   }
 }
 ```
 
 **2. How it works**
-*   Claude starts `offline_search_adapter.py`.
-*   The adapter automatically starts `kiwix-serve` in the background (Port 8081).
-*   The adapter queries the local SQLite DB directly.
+- Claude starts the MCP server automatically.
+- The server starts `kiwix-serve` in the background (port 8081).
+- Search queries go directly to the local SQLite index.
 
 ---
 
-### Option B: Remote Mode (Distributed)
+### Option C: Distributed (Remote Server + Client)
+
 *Use this if:* ZIM files are on a **dedicated server**, and Claude is on your **laptop**.
 
-#### Server Side (The machine with files)
-You need to run two services physically on the server.
+#### Server Side
 
-**1. Start Document Server (Kiwix)**
-```powershell
-# Serves content on Port 8081
-Start-Process -FilePath "D:\Downloads\kiwix-tools_win-i686-3.7.0-2\kiwix-serve.exe" -ArgumentList "--port 8081 --library D:\Downloads\library.xml" -WindowStyle Hidden
+**1. Start Kiwix (Document Server)**
+
+```bash
+kiwix-serve --port 8081 --library path/to/library.xml
 ```
 
-**2. Start Search API**
-```powershell
-# Serves search results on Port 8082
-Set-Location C:\Users\relz6\Documents\repos\offline-search
-Start-Process -FilePath "python" -ArgumentList "search_server.py" -WindowStyle Hidden
+**2. Start the Search API**
+
+```bash
+offline-search-server
+# Starts FastAPI on port 8082 with auto-docs at /docs
 ```
 
-#### Server Side (Linux/Ubuntu)
-1.  **Install Kiwix Tools**: Download the Linux x86_64 version from [kiwix.org](https://download.kiwix.org/release/kiwix-tools/) and extract the binary named `kiwix-serve` into the `dist/server/kiwix-tools/` folder.
-2.  **Run the script**:
-    ```bash
-    cd dist/server
-    chmod +x start_server.sh
-    ./start_server.sh
-    ```
+#### Client Side
 
-#### Client Side (The machine with Claude)
 **1. Configure Connection**
-Edit `client_mcp_adapter.py` on your laptop and set the Server IP:
-```python
-# client_mcp_adapter.py
-CENTRAL_HOST = "192.168.1.50"  # <--- Replace with your SERVER'S IP address
+
+Set the server IP via environment variable or `.env` file:
+
+```bash
+export OFFLINE_SEARCH_REMOTE_HOST=192.168.1.50
 ```
 
-**2. Configure Claude**
-Add this to the laptop's Claude config:
+Or create a `.env` file:
+
+```env
+OFFLINE_SEARCH_REMOTE_HOST=192.168.1.50
+OFFLINE_SEARCH_REMOTE_SEARCH_PORT=8082
+OFFLINE_SEARCH_REMOTE_KIWIX_PORT=8081
+```
+
+**2. Register with Claude**
+
+For Claude Code:
+```bash
+claude mcp add offline-search -- python -m offline_search.mcp_client
+```
+
+For Claude Desktop, add to config:
 ```json
 {
   "mcpServers": {
     "offline-search": {
       "command": "python",
-      "args": ["C:\\path\\to\\client_mcp_adapter.py"]
+      "args": ["-m", "offline_search.mcp_client"]
     }
   }
 }
@@ -102,25 +144,35 @@ Add this to the laptop's Claude config:
 
 ## 🟩 Troubleshooting & Health Checks
 
-### Check if it's working (Local)
-Run this manual script to see if the search returns results:
-```powershell
-Set-Location C:\Users\relz6\Documents\repos\offline-search
-python test_search.py "python"
+### Health Check (Server API)
+
+```bash
+curl http://127.0.0.1:8082/health
 ```
 
-### Check if it's working (Remote)
-On the client machine (laptop), try to ping the server's search API:
-```powershell
-# Replace 127.0.0.1 with your Server IP
-curl "http://127.0.0.1:8082/search?q=python"
-```
-*If this fails: Check Windows Firewall on the Server (Allow Ports 8081 and 8082).*
+Returns index stats and server status. If using the distributed mode, replace `127.0.0.1` with your server IP.
 
-### Packaging Checklist
-If moving files to an air-gapped machine, ensure you have:
-1.  `build_local_index.py`, `offline_search_adapter.py`, `search_server.py`
-2.  `data/offline_index.sqlite` (The built index)
-3.  The **Kiwix Tools** folder (kiwix-serve.exe)
-4.  Your `library.xml` file
-5.  All `.zim` files referenced in the library
+### Interactive API Docs
+
+When running the server, open `http://127.0.0.1:8082/docs` for the Swagger UI — lets you test search, index pages, and manage content visually.
+
+### Quick Search Test
+
+```bash
+curl "http://127.0.0.1:8082/search?q=python+asyncio"
+```
+
+### Firewall Notes
+
+For distributed mode, ensure ports **8081** (Kiwix) and **8082** (Search API) are open on the server.
+
+### Packaging for Air-Gap Transfer
+
+If moving to a fully disconnected machine, ensure you package:
+
+1. The full `offline-search` project (or the built wheel)
+2. `data/offline_index.sqlite` (the pre-built index)
+3. The Kiwix Tools binary (`kiwix-serve`)
+4. Your `library.xml` file
+5. All `.zim` files referenced in the library
+6. Python wheel dependencies (use `pip download -r requirements.txt`)

@@ -1,46 +1,134 @@
-# Offline ZIM Search for MCP
+# Offline Search for MCP & Claude Code
 
-This project provides a Model Context Protocol (MCP) server that allows AI agents (like Claude) to search offline documentation hosted in ZIM archives. It supports complex full-text search across thousands of offline articles using a local SQLite index over Kiwix.
+A **drop-in replacement** for `google_search` and `visit_page` tools — designed for air-gapped environments where the AI agent has no internet access.
+
+It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Overflow, Python docs, DevDocs, etc.) into a local SQLite FTS5 database, then exposes them as tools via:
+
+- **MCP** (Model Context Protocol) — for Claude Desktop
+- **Claude Code skill** — for the Claude Code CLI
+- **HTTP API** — for distributed / multi-machine deployments
+
+```mermaid
+graph LR
+    A[Claude Desktop / Claude Code] -->|MCP| B[mcp_local.py]
+    B --> C[search_engine.py]
+    C --> D[(SQLite FTS5)]
+    B --> E[kiwix-serve :8081]
+
+    F[Claude on laptop] -->|MCP| G[mcp_client.py]
+    G -->|HTTP| H[server.py :8082]
+    H --> C
+    G -->|HTTP| E
+```
 
 ## Features
 
--   **Offline First**: Designed for air-gapped environments.
--   **Dual Search**: Combines instant full-text search (SQLite FTS5) with Kiwix's native server.
--   **Distributed Ready**: Run the heavy ZIM server on a centralized machine and connect lightweight clients via MCP.
--   **Smart Ranking**: Enhanced ranking algorithms to prioritize English documentation and core API references.
--   **Extensible**: Inject external local content (e.g., Confluence, Artifactory) into the same search index.
+- **Offline first** — works in fully air-gapped environments
+- **Dual tools** — `google_search` for search + `visit_page` to read full content
+- **Smart ranking** — BM25 with title boosting, synonym expansion, prefix matching, and non-English demotion
+- **Distributed ready** — run the heavy ZIM server centrally, connect lightweight clients over the network
+- **Content management API** — index custom HTML pages, crawl internal sites, manage the index via REST
+- **Extensible** — inject content from Confluence, Artifactory, or any other source
 
 ## Quick Start
 
-### 1. Installation
-**Requirements:** Python 3.11+
+### 1. Install
+
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
-### 2. Build Index
+### 2. Build the Index
+
 ```bash
-python build_local_index.py --library path/to/library.xml --output data/offline_index.sqlite
+offline-search-index --library path/to/library.xml --output data/offline_index.sqlite
 ```
 
-### 3. Run
-Local mode (all-in-one):
+### 3. Use with Claude Code (Recommended)
+
 ```bash
-python offline_search_adapter.py
+# Register as a Claude Code skill
+./scripts/install_claude_code.sh     # Linux/macOS
+.\scripts\install_claude_code.ps1    # Windows
 ```
 
-For detailed deployment instructions, including distributed setup, please refer to [DEPLOYMENT.md](DEPLOYMENT.md).
+Then start Claude Code anywhere — it will have `google_search` and `visit_page` tools available.
+
+### 4. Use with Claude Desktop
+
+Add to `%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "offline-search": {
+      "command": "python",
+      "args": ["-m", "offline_search.mcp_local"]
+    }
+  }
+}
+```
+
+For detailed deployment instructions (including distributed mode), see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Project Structure
 
--   `offline_search_adapter.py`: Main MCP server for local deployments.
--   `build_local_index.py`: Crawler that indexes ZIM files into SQLite.
--   `search_server.py`: Lightweight API for the distributed server component.
--   `client_mcp_adapter.py`: Thin MCP client for distributed setups.
--   `add_external_source.py`: Utility to index external/intranet websites.
--   `test_search.py`: Diagnostic script to verify search results.
+```
+src/offline_search/
+├── config.py          # Centralised settings (env vars, .env, defaults)
+├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
+├── kiwix.py           # Kiwix-serve lifecycle + page fetching → Markdown
+├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
+├── mcp_local.py       # MCP server — local/all-in-one mode
+├── mcp_client.py      # MCP client adapter — remote/distributed mode
+└── server.py          # FastAPI HTTP API + content management endpoints
+
+tests/                 # pytest test suite
+scripts/               # Installation helpers for Claude Code
+```
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `google_search(query)` | Full-text search across the offline library. Named to match the built-in web search tool for seamless drop-in. |
+| `visit_page(url)` | Fetch and read the full content of a page (returns clean Markdown). |
+
+## HTTP API Endpoints
+
+When running the server (`offline-search-server`):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/search?q=...&limit=10&zim=...` | Full-text search |
+| `GET` | `/health` | Health check + index stats |
+| `GET` | `/stats` | Detailed index statistics |
+| `POST` | `/index/page` | Index a single HTML/text page |
+| `POST` | `/index/crawl` | Crawl and index a website |
+| `DELETE` | `/index?url=...` | Remove a document by URL |
+
+## Configuration
+
+All settings support environment variable overrides (prefix: `OFFLINE_SEARCH_`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OFFLINE_SEARCH_DB_PATH` | `data/offline_index.sqlite` | FTS5 index path |
+| `OFFLINE_SEARCH_KIWIX_PORT` | `8081` | Kiwix-serve port |
+| `OFFLINE_SEARCH_SERVER_PORT` | `8082` | HTTP API port |
+| `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for distributed mode |
+
+Or create a `.env` file at the project root.
+
+## Testing
+
+```bash
+pytest tests/ -v
+pytest tests/ --cov=offline_search --cov-report=term-missing
+```
 
 ## Requirements
--   Python 3.10+
--   `kiwix-tools` (downloaded separately)
--   ZIM archives (e.g., from [download.kiwix.org](https://download.kiwix.org/zim/))
+
+- Python 3.11+
+- [Kiwix Tools](https://download.kiwix.org/release/kiwix-tools/) (`kiwix-serve` binary)
+- ZIM archives (from [download.kiwix.org/zim/](https://download.kiwix.org/zim/))
