@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot   = Split-Path -Parent $scriptDir
-$skillSrc   = Join-Path $repoRoot ".claude\skills\offline-search"
+$skillSrc   = Join-Path $repoRoot "skills\offline-search"
 $skillDst   = Join-Path $env:USERPROFILE ".claude\skills\offline-search"
 
 Write-Host "=== Offline Search — Claude Code Installer ===" -ForegroundColor Cyan

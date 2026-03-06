@@ -24,7 +24,7 @@ import pytest
 # Locate the skill scripts relative to the repo root.
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS_DIR = REPO_ROOT / ".claude" / "skills" / "offline-search" / "scripts"
+SCRIPTS_DIR = REPO_ROOT / "skills" / "offline-search" / "scripts"
 SEARCH_SCRIPT = SCRIPTS_DIR / "search.py"
 FETCH_SCRIPT = SCRIPTS_DIR / "fetch_page.py"
 

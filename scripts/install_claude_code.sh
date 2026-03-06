@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-SKILL_SRC="$REPO_ROOT/.claude/skills/offline-search"
+SKILL_SRC="$REPO_ROOT/skills/offline-search"
 SKILL_DST="$HOME/.claude/skills/offline-search"
 
 echo "=== Offline Search — Claude Code Installer ==="

@@ -16,34 +16,43 @@ This repository supports three deployment modes:
 pip install -e ".[dev]"
 ```
 
-### 2. Prepare your ZIM library and build the SQLite index
+### 2. Download Kiwix Tools and prepare your ZIM library
 
-**What is a ZIM file?**  A compact offline snapshot of a website
-(Wikipedia, Stack Overflow, Python docs, DevDocs, …).
-Download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/).
+**Step 2a — Download Kiwix Tools**
 
-**What is `library.xml`?**  A catalog file that lists your ZIM archives and
-their disk paths.  It is machine-specific and **must not be committed to git**
-(it is listed in `.gitignore`).
+You need two binaries from Kiwix Tools: `kiwix-serve` (content server) and
+`kiwix-manage` (library catalog manager).
 
-Create it from the template:
+Download from [download.kiwix.org/release/kiwix-tools/](https://download.kiwix.org/release/kiwix-tools/):
+
+| OS | File |
+|----|------|
+| Windows 64-bit | `kiwix-tools_win-x86_64-*.zip` |
+| Linux x86_64 | `kiwix-tools_linux-x86_64-*.tar.gz` |
+| macOS | `kiwix-tools_macos-x86_64-*.tar.gz` |
+
+Extract and either add to PATH, or place the `kiwix-tools/` folder next to
+this repo (auto-detected by the config).
+
+**Step 2b — Download ZIM files**
+
+Browse and download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/).
+
+**Step 2c — Build `library.xml`**
+
+Use the included helper script to scan your ZIM folder and register everything at once:
 
 ```bash
 # Linux / macOS
-cp library.xml.example library.xml
+./scripts/build_library.sh ~/zims
 
 # Windows (PowerShell)
-Copy-Item library.xml.example library.xml
+.\scripts\build_library.ps1 C:\zims
 ```
 
-Edit `library.xml` — replace the example `<book>` entries with your actual
-ZIM file paths.  See [`library.xml.example`](library.xml.example) for the
-full attribute reference.
+`library.xml` contains your local file paths and is gitignored — never commit it.
 
-> **Tip:** [Kiwix Desktop](https://kiwix.org/en/applications/kiwix-desktop/)
-> can export a ready-made `library.xml` via *Library → Export library*.
-
-Then build the index:
+**Step 2d — Build the SQLite index**
 
 ```bash
 offline-search-index --library library.xml --output data/offline_index.sqlite

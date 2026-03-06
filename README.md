@@ -11,8 +11,8 @@ It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Ov
 ```mermaid
 graph LR
     subgraph "Option A: Claude Code Skill"
-        CC1[Claude Code] -->|Bash| S1[scripts/search.py]
-        CC1 -->|Bash| S2[scripts/fetch_page.py]
+        CC1[Claude Code] -->|Bash| S1[skills/search.py]
+        CC1 -->|Bash| S2[skills/fetch_page.py]
         S1 --> SE[search_engine.py]
         S2 --> K1[kiwix-serve]
     end
@@ -47,9 +47,27 @@ pip install -e ".[dev]"
 ### 2. Prepare your ZIM library
 
 Offline Search uses **ZIM archives** — compact offline snapshots of websites —
-as its content source.  Three sub-steps:
+as its content source.  Four sub-steps:
 
-#### 2a. Download ZIM files
+#### 2a. Download Kiwix Tools
+
+Kiwix Tools provides two binaries you need: `kiwix-serve` (the content server)
+and `kiwix-manage` (the library catalog manager).
+
+Download the appropriate package for your OS from
+[download.kiwix.org/release/kiwix-tools/](https://download.kiwix.org/release/kiwix-tools/):
+
+| OS | File to download |
+|----|-----------------|
+| Windows 64-bit | `kiwix-tools_win-x86_64-*.zip` |
+| Linux x86_64 | `kiwix-tools_linux-x86_64-*.tar.gz` |
+| macOS | `kiwix-tools_macos-x86_64-*.tar.gz` |
+
+Extract the archive and either:
+- **Add the folder to your PATH**, or
+- **Place it at `kiwix-tools/`** next to this repo — the tool auto-detects it there
+
+#### 2b. Download ZIM files
 
 Browse and download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/):
 
@@ -64,35 +82,33 @@ Browse and download from [download.kiwix.org/zim/](https://download.kiwix.org/zi
 Place ZIM files anywhere on disk — a `zims/` folder next to this repo works
 well, but an external drive or network share is fine too.
 
-#### 2b. Create `library.xml`
+#### 2c. Build `library.xml`
 
-`library.xml` is a catalog file that tells offline-search (and kiwix-serve)
-which ZIM archives you have and where they live.  It is **machine-specific**
-and therefore listed in `.gitignore` — never commit it.
-
-Copy the provided template and fill it in:
+`library.xml` is a catalog that tells offline-search (and kiwix-serve) which
+ZIM archives you have.  Use the included helper script to scan your ZIM folder
+and register everything at once:
 
 ```bash
 # Linux / macOS
-cp library.xml.example library.xml
+./scripts/build_library.sh ~/zims
 
 # Windows (PowerShell)
-Copy-Item library.xml.example library.xml
+.\scripts\build_library.ps1 C:\zims
 ```
 
-Open `library.xml` and replace the example `<book>` entries with paths to
-your actual ZIM files.  Paths can be **relative** (to `library.xml`) or
-**absolute**.
+Or add individual files by hand if you prefer:
 
-> **Tip — Kiwix Desktop:**  [Kiwix Desktop](https://kiwix.org/en/applications/kiwix-desktop/)
-> manages ZIM files through a GUI and can export a ready-made `library.xml`
-> via *Library → Export library*.  That exported file can be used directly.
+```bash
+kiwix-manage library.xml add path/to/python-docs.zim
+```
 
-Each `<book>` entry needs at minimum an `id` (any UUID), `path`, and `title`.
-See [`library.xml.example`](library.xml.example) for annotated examples and
-a full attribute reference.
+`library.xml` is **machine-specific** (it contains your local file paths) and
+is listed in `.gitignore` — never commit it.
 
-#### 2c. Build the SQLite index
+> **Reference:** [`library.xml.example`](library.xml.example) shows the XML
+> format in full if you ever need to inspect or edit the file by hand.
+
+#### 2d. Build the SQLite index
 
 ```bash
 offline-search-index --library library.xml --output data/offline_index.sqlite
@@ -148,7 +164,7 @@ src/offline_search/
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP API + content management endpoints
 
-.claude/skills/offline-search/
+skills/offline-search/
 ├── SKILL.md           # Claude Code skill definition
 └── scripts/
     ├── search.py      # CLI: search the index, print results
