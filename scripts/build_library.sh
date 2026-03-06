@@ -27,6 +27,13 @@ if [ ! -d "$ZIM_DIR" ]; then
     exit 1
 fi
 
+mapfile -t ZIMS < <(find "$ZIM_DIR" -maxdepth 1 -name "*.zim" | sort)
+
+if [ ${#ZIMS[@]} -eq 0 ]; then
+    echo "No .zim files found in $ZIM_DIR" >&2
+    exit 1
+fi
+
 # Locate kiwix-manage: prefer ./kiwix-tools/, then PATH.
 if [ -x "kiwix-tools/kiwix-manage" ]; then
     KIWIX_MANAGE="kiwix-tools/kiwix-manage"
@@ -34,13 +41,6 @@ elif command -v kiwix-manage &>/dev/null; then
     KIWIX_MANAGE="kiwix-manage"
 else
     echo "Error: kiwix-manage not found. Add it to PATH or place kiwix-tools/ next to this repo." >&2
-    exit 1
-fi
-
-mapfile -t ZIMS < <(find "$ZIM_DIR" -maxdepth 1 -name "*.zim" | sort)
-
-if [ ${#ZIMS[@]} -eq 0 ]; then
-    echo "No .zim files found in $ZIM_DIR" >&2
     exit 1
 fi
 
