@@ -308,7 +308,7 @@ class TestFetchMain:
 class TestSkillStructure:
     """Verify the skill directory has the expected layout and frontmatter."""
 
-    SKILL_DIR = REPO_ROOT / ".claude" / "skills" / "offline-search"
+    SKILL_DIR = REPO_ROOT / "skills" / "offline-search"
 
     def test_skill_md_exists(self):
         assert (self.SKILL_DIR / "SKILL.md").is_file()
