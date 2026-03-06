@@ -85,29 +85,40 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
 # Database helpers
 # ---------------------------------------------------------------------------
 
+_schema_ready: set[str] = set()
+
+
 def prepare_database(db_path: Path, *, reset: bool = False) -> sqlite3.Connection:
-    """Open (and optionally reset) the FTS5 index database."""
+    """Open (and optionally reset) the FTS5 index database.
+
+    Schema creation is cached per *db_path* so that repeated calls (e.g. from
+    HTTP request handlers) skip the ``_table_exists`` check after the first
+    successful initialisation.
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
 
-    if reset or not _table_exists(conn, "documents"):
-        conn.execute("DROP TABLE IF EXISTS metadata")
-        conn.execute("DROP TABLE IF EXISTS documents")
-        conn.execute(
-            "CREATE VIRTUAL TABLE documents USING fts5("
-            "title, content, zim_name, namespace, url, "
-            "tokenize='porter'"
-            ")"
-        )
-        conn.execute(
-            "CREATE TABLE metadata ("
-            "docid INTEGER PRIMARY KEY, "
-            "zim_path TEXT NOT NULL"
-            ")"
-        )
-        conn.commit()
+    db_key = str(db_path)
+    if reset or db_key not in _schema_ready:
+        if reset or not _table_exists(conn, "documents"):
+            conn.execute("DROP TABLE IF EXISTS metadata")
+            conn.execute("DROP TABLE IF EXISTS documents")
+            conn.execute(
+                "CREATE VIRTUAL TABLE documents USING fts5("
+                "title, content, zim_name, namespace, url, "
+                "tokenize='porter'"
+                ")"
+            )
+            conn.execute(
+                "CREATE TABLE metadata ("
+                "docid INTEGER PRIMARY KEY, "
+                "zim_path TEXT NOT NULL"
+                ")"
+            )
+            conn.commit()
+        _schema_ready.add(db_key)
     return conn
 
 

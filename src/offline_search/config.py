@@ -151,5 +151,36 @@ class Settings(BaseSettings):
         return f"http://{self.remote_host}:{self.remote_kiwix_port}"
 
 
+class _SettingsProxy:
+    """Lazy proxy — defers ``Settings()`` construction until first access.
+
+    This avoids filesystem probes (``Path.exists``, ``shutil.which``) at
+    **import time**, which is important for test isolation and environments
+    where the working directory or PATH may not yet be configured.
+    """
+
+    _instance: Settings | None
+
+    def __init__(self) -> None:
+        object.__setattr__(self, "_instance", None)
+
+    def _resolve(self) -> Settings:
+        inst = object.__getattribute__(self, "_instance")
+        if inst is None:
+            inst = Settings()
+            object.__setattr__(self, "_instance", inst)
+        return inst
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._resolve(), name)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        setattr(self._resolve(), name, value)
+
+    def __repr__(self) -> str:
+        return repr(self._resolve())
+
+
 # Module-level singleton — import ``settings`` everywhere.
-settings = Settings()
+# Wrapped in a lazy proxy so filesystem detection only runs on first access.
+settings: Settings = _SettingsProxy()  # type: ignore[assignment]

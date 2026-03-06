@@ -48,6 +48,11 @@ data/
 *.log.*
 zimply.log
 
+# Test / coverage artifacts
+.coverage
+htmlcov/
+coverage.xml
+
 # Test files
 library_test.xml
 

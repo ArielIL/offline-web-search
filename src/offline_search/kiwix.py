@@ -10,7 +10,7 @@ import logging
 import socket
 import subprocess
 import time
-from typing import Optional
+import urllib.parse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -81,6 +81,22 @@ def start_kiwix_server(
 # Page fetching
 # ---------------------------------------------------------------------------
 
+def html_to_markdown(html: str, *, cap: int = 15_000) -> str:
+    """Convert HTML to clean Markdown, stripping boilerplate elements.
+
+    This is the **single source of truth** for HTML → Markdown conversion,
+    shared by :func:`fetch_page` (local) and the remote ``visit_page`` path
+    in :mod:`offline_search.mcp`.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup.select("nav, header, footer, script, style, .mw-jump-link"):
+        tag.decompose()
+    markdown_text = md(str(soup), strip=["img"])
+    lines = [line.rstrip() for line in markdown_text.splitlines()]
+    cleaned = "\n".join(line for line in lines if line)
+    return cleaned[:cap]
+
+
 async def fetch_page(url: str, *, timeout: float = 10.0) -> str:
     """Fetch a page from Kiwix and return it as clean Markdown text.
 
@@ -96,24 +112,14 @@ async def fetch_page(url: str, *, timeout: float = 10.0) -> str:
 
     content_type = resp.headers.get("content-type", "")
     if "html" in content_type:
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # Remove navigation / boilerplate elements
-        for tag in soup.select("nav, header, footer, script, style, .mw-jump-link"):
-            tag.decompose()
-        markdown_text = md(str(soup), strip=["img"])
-        # Collapse excessive whitespace
-        lines = [line.rstrip() for line in markdown_text.splitlines()]
-        cleaned = "\n".join(line for line in lines if line)
-        return cleaned[:15_000]  # Cap length to avoid overloading context
+        return html_to_markdown(resp.text)
     else:
-        # Plain text fallback
         return resp.text[:15_000]
 
 
 async def search_kiwix_html(query: str, kiwix_url: str | None = None) -> list[dict]:
     """Fallback: scrape Kiwix's built-in HTML search results page."""
     base = kiwix_url or settings.kiwix_url
-    import urllib.parse
     search_url = f"{base}/search?pattern={urllib.parse.quote(query)}"
 
     try:

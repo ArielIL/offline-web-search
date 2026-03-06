@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 import sqlite3
 import urllib.parse
 from dataclasses import dataclass, field
@@ -232,7 +231,7 @@ def search_sync(
         candidates.sort(key=lambda c: c.is_non_english)
 
         return candidates[:limit]
-    except Exception:
+    except sqlite3.Error:
         logger.exception("FTS5 search failed for query=%r", query)
         return []
     finally:

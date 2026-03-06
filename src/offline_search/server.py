@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from urllib.parse import urljoin, urlparse
 
+import httpx
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
@@ -63,7 +65,7 @@ async def stats():
 async def search_endpoint(
     q: str = Query(..., description="Search query"),
     limit: int = Query(10, ge=1, le=100, description="Max results"),
-    zim: Optional[str] = Query(None, description="Filter by ZIM source name"),
+    zim: str | None = Query(None, description="Filter by ZIM source name"),
 ):
     """Full-text search across the offline index."""
     if not q.strip():
@@ -113,10 +115,6 @@ async def index_crawl(req: IndexCrawlRequest):
 
     This does a lightweight breadth-first crawl starting from *base_url*.
     """
-    import httpx
-    from bs4 import BeautifulSoup
-    from urllib.parse import urljoin, urlparse
-
     visited: set[str] = set()
     queue = [req.base_url]
     indexed = 0

@@ -26,7 +26,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import settings
-from .kiwix import fetch_page, search_kiwix_html, start_kiwix_server
+from .kiwix import fetch_page, html_to_markdown, search_kiwix_html, start_kiwix_server
 from .search_engine import search
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,8 @@ async def _google_search_local(query: str) -> str:
             lines = [r.format_for_llm(settings.kiwix_url) for r in results]
             return "\n".join(lines)
 
-        # Fallback: scrape Kiwix HTML search
+        # Fallback: scrape Kiwix HTML search (ensure kiwix is running)
+        start_kiwix_server()
         html_hits = await search_kiwix_html(query)
         if html_hits:
             lines = [
@@ -159,17 +160,9 @@ async def _visit_page_remote(url: str) -> str:
             resp = await client.get(url)
             resp.raise_for_status()
 
-        from bs4 import BeautifulSoup
-        from markdownify import markdownify as md
-
         content_type = resp.headers.get("content-type", "")
         if "html" in content_type:
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for tag in soup.select("nav, header, footer, script, style"):
-                tag.decompose()
-            text = md(str(soup), strip=["img"])
-            lines = [line.rstrip() for line in text.splitlines() if line.strip()]
-            return "\n".join(lines)[:15_000]
+            return html_to_markdown(resp.text)
         else:
             return resp.text[:15_000]
     except Exception as e:
