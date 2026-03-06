@@ -14,6 +14,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
 ZIM_DIR="${1:-}"
 LIBRARY="${2:-library.xml}"
 
@@ -34,9 +37,9 @@ if [ ${#ZIMS[@]} -eq 0 ]; then
     exit 1
 fi
 
-# Locate kiwix-manage: prefer ./kiwix-tools/, then PATH.
-if [ -x "kiwix-tools/kiwix-manage" ]; then
-    KIWIX_MANAGE="kiwix-tools/kiwix-manage"
+# Locate kiwix-manage: prefer <repo>/kiwix-tools/, then PATH.
+if [ -x "$REPO_ROOT/kiwix-tools/kiwix-manage" ]; then
+    KIWIX_MANAGE="$REPO_ROOT/kiwix-tools/kiwix-manage"
 elif command -v kiwix-manage &>/dev/null; then
     KIWIX_MANAGE="kiwix-manage"
 else

@@ -31,9 +31,14 @@ if (-not (Test-Path $ZimDir -PathType Container)) {
     exit 1
 }
 
-# Locate kiwix-manage: prefer .\kiwix-tools\, then PATH.
+# Locate kiwix-manage: prefer <repo>/kiwix-tools/, then PATH.
+# Try without .exe first (Linux), then .exe (Windows).
 $kiwixManage = $null
-$localBin = Join-Path (Split-Path -Parent $PSScriptRoot) "kiwix-tools\kiwix-manage.exe"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$localBin = Join-Path $repoRoot "kiwix-tools/kiwix-manage"
+if (-not (Test-Path $localBin)) {
+    $localBin = Join-Path $repoRoot "kiwix-tools/kiwix-manage.exe"
+}
 if (Test-Path $localBin) {
     $kiwixManage = $localBin
 } elseif (Get-Command "kiwix-manage" -ErrorAction SilentlyContinue) {
