@@ -70,6 +70,7 @@ def mock_kiwix_env(tmp_path: Path) -> dict:
         stub.chmod(0o755)
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    env["KIWIX_MANAGE"] = str(stub)
     return env
 
 
@@ -113,9 +114,9 @@ class TestBuildLibrarySh:
         assert "No .zim files" in r.stderr
 
     def test_missing_kiwix_manage_exits_1(self, tmp_path: Path, zim_dir: Path) -> None:
-        # Use only core system paths so kiwix-manage is guaranteed absent.
+        # Point KIWIX_MANAGE at a nonexistent path to bypass REPO_ROOT discovery.
         env = os.environ.copy()
-        env["PATH"] = "/usr/bin:/bin:/usr/local/bin"
+        env["KIWIX_MANAGE"] = str(tmp_path / "no-such-kiwix-manage")
         r = self._run(str(zim_dir), cwd=tmp_path, env=env)
         assert r.returncode == 1
         assert "not found" in r.stderr
@@ -185,16 +186,9 @@ class TestBuildLibraryPs1:
     def test_missing_kiwix_manage_exits_nonzero(
         self, tmp_path: Path, zim_dir: Path
     ) -> None:
-        empty_bin = tmp_path / "empty_bin"
-        empty_bin.mkdir()
         env = os.environ.copy()
-        # Provide a PATH that is guaranteed to have no kiwix-manage on any OS.
-        # Unix: keep system dirs so pwsh itself can still run; strip everything else.
-        # Windows: pwsh resolves its own stdlib internally, so an empty dir is safe.
-        if sys.platform == "win32":
-            env["PATH"] = str(empty_bin)
-        else:
-            env["PATH"] = f"/usr/bin:/bin:/usr/local/bin:{empty_bin}"
+        # Point KIWIX_MANAGE at a nonexistent path to bypass REPO_ROOT discovery.
+        env["KIWIX_MANAGE"] = str(tmp_path / "no-such-kiwix-manage")
         r = self._run(str(zim_dir), cwd=tmp_path, env=env)
         assert r.returncode != 0
 
