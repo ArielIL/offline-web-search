@@ -16,12 +16,37 @@ This repository supports three deployment modes:
 pip install -e ".[dev]"
 ```
 
-### 2. Build the SQLite Index
+### 2. Prepare your ZIM library and build the SQLite index
 
-Run the indexer to extract text from your ZIM library:
+**What is a ZIM file?**  A compact offline snapshot of a website
+(Wikipedia, Stack Overflow, Python docs, DevDocs, …).
+Download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/).
+
+**What is `library.xml`?**  A catalog file that lists your ZIM archives and
+their disk paths.  It is machine-specific and **must not be committed to git**
+(it is listed in `.gitignore`).
+
+Create it from the template:
 
 ```bash
-offline-search-index --library path/to/library.xml --output data/offline_index.sqlite
+# Linux / macOS
+cp library.xml.example library.xml
+
+# Windows (PowerShell)
+Copy-Item library.xml.example library.xml
+```
+
+Edit `library.xml` — replace the example `<book>` entries with your actual
+ZIM file paths.  See [`library.xml.example`](library.xml.example) for the
+full attribute reference.
+
+> **Tip:** [Kiwix Desktop](https://kiwix.org/en/applications/kiwix-desktop/)
+> can export a ready-made `library.xml` via *Library → Export library*.
+
+Then build the index:
+
+```bash
+offline-search-index --library library.xml --output data/offline_index.sqlite
 ```
 
 *Tip: Add `--limit 50` for a quick 1-minute test run.*

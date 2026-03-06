@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  library.xml — Kiwix library catalog
+  =====================================
+  This is a TEMPLATE.  Copy it to `library.xml` and replace the example
+  entries with the ZIM archives you have downloaded.
+
+  WHY THIS FILE EXISTS
+  --------------------
+  Both `offline-search-index` and `kiwix-serve` need to know which ZIM
+  archives are available and where they live on disk.  `library.xml` is that
+  manifest.  Because it contains machine-specific file paths it is listed in
+  `.gitignore` — never commit your actual `library.xml`.
+
+
+  STEP 1 — DOWNLOAD ZIM FILES
+  ----------------------------
+  Browse and download from https://download.kiwix.org/zim/
+
+  Popular starting points for developers:
+    Python docs       → zim/devdocs/devdocs_en_python_*.zim
+    JavaScript docs   → zim/devdocs/devdocs_en_javascript_*.zim
+    Stack Overflow    → zim/stack_exchange/stackoverflow.com_en_all_*.zim
+    DevDocs (many)    → zim/devdocs/
+    Wikipedia (EN)    → zim/wikipedia/wikipedia_en_all_mini_*.zim  (starts small)
+
+  Place ZIM files anywhere on disk — a `zims/` folder next to this file works
+  well, but an external drive or a network share is fine too.
+
+
+  STEP 2 — FILL IN THIS TEMPLATE
+  --------------------------------
+  For each ZIM file add a <book> element.  Required attributes:
+
+    id    — a UUID (generate one: python -c "import uuid; print(uuid.uuid4())")
+    path  — path to the .zim file, relative to this file OR absolute
+    title — human-readable display name
+
+  Optional but useful attributes:
+    name        — Kiwix internal name, e.g. "devdocs_en_javascript"
+                  (used as the `zim_name` column in the search index — keep it
+                  short and stable so you can filter searches by source)
+    description — one-line summary shown in Kiwix Desktop
+    language    — ISO 639-3 code, e.g. "eng"
+    creator     — upstream content creator, e.g. "DevDocs", "Stack Exchange"
+
+  TIP: Kiwix Desktop (https://kiwix.org/en/applications/kiwix-desktop/)
+  manages ZIM files through a GUI and can export a ready-made library.xml via
+  Library → Export library.  That exported file can be used directly here.
+
+
+  STEP 3 — BUILD THE INDEX
+  -------------------------
+  offline-search-index --library library.xml --output data/offline_index.sqlite
+
+  Add --limit 50 for a quick smoke-test (indexes only 50 articles per ZIM).
+-->
+<library version="20110515">
+
+    <!--
+      ── EXAMPLE 1: Python Documentation ──────────────────────────────────
+      Download: https://download.kiwix.org/zim/devdocs/devdocs_en_python_*.zim
+    -->
+    <book
+        id="00000000-0000-0000-0000-000000000001"
+        path="devdocs_en_python_2026-01.zim"
+        title="Python Docs"
+        description="Python documentation, by DevDocs"
+        language="eng"
+        creator="DevDocs"
+        publisher="openZIM"
+        name="devdocs_en_python"
+    />
+
+    <!--
+      ── EXAMPLE 2: JavaScript Documentation ──────────────────────────────
+      Download: https://download.kiwix.org/zim/devdocs/devdocs_en_javascript_*.zim
+    -->
+    <book
+        id="00000000-0000-0000-0000-000000000002"
+        path="devdocs_en_javascript_2026-01.zim"
+        title="JavaScript Docs"
+        description="JavaScript documentation, by DevDocs"
+        language="eng"
+        creator="DevDocs"
+        publisher="openZIM"
+        name="devdocs_en_javascript"
+    />
+
+    <!--
+      ── EXAMPLE 3: Stack Overflow ─────────────────────────────────────────
+      Download: https://download.kiwix.org/zim/stack_exchange/
+      Note: the full dump is large (10+ GB). Consider the "mini" variant or
+      a topical subset like "stackoverflow.com_en_programming".
+    -->
+    <book
+        id="00000000-0000-0000-0000-000000000003"
+        path="stackoverflow.com_en_all_2025-12.zim"
+        title="Stack Overflow"
+        description="Stack Exchange Q&amp;A for programmers"
+        language="eng"
+        creator="Stack Exchange"
+        publisher="openZIM"
+        name="stackoverflow.com_en_all"
+    />
+
+    <!--
+      Add as many <book> entries as you like.
+      There is no limit — offline-search-index iterates all of them.
+    -->
+
+</library>

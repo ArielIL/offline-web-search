@@ -72,5 +72,6 @@ data/
 *.zim
 library.xml
 library_test.xml
+temp_library.xml
 kiwix-tools*/
 dist/

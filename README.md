@@ -44,11 +44,61 @@ graph LR
 pip install -e ".[dev]"
 ```
 
-### 2. Build the Index
+### 2. Prepare your ZIM library
+
+Offline Search uses **ZIM archives** — compact offline snapshots of websites —
+as its content source.  Three sub-steps:
+
+#### 2a. Download ZIM files
+
+Browse and download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/):
+
+| Content | Download path |
+|---------|---------------|
+| Python docs | `zim/devdocs/devdocs_en_python_*.zim` |
+| JavaScript docs | `zim/devdocs/devdocs_en_javascript_*.zim` |
+| Stack Overflow | `zim/stack_exchange/stackoverflow.com_en_all_*.zim` |
+| Wikipedia (compact) | `zim/wikipedia/wikipedia_en_all_mini_*.zim` |
+| Many more… | `zim/devdocs/`, `zim/stack_exchange/`, … |
+
+Place ZIM files anywhere on disk — a `zims/` folder next to this repo works
+well, but an external drive or network share is fine too.
+
+#### 2b. Create `library.xml`
+
+`library.xml` is a catalog file that tells offline-search (and kiwix-serve)
+which ZIM archives you have and where they live.  It is **machine-specific**
+and therefore listed in `.gitignore` — never commit it.
+
+Copy the provided template and fill it in:
 
 ```bash
-offline-search-index --library path/to/library.xml --output data/offline_index.sqlite
+# Linux / macOS
+cp library.xml.example library.xml
+
+# Windows (PowerShell)
+Copy-Item library.xml.example library.xml
 ```
+
+Open `library.xml` and replace the example `<book>` entries with paths to
+your actual ZIM files.  Paths can be **relative** (to `library.xml`) or
+**absolute**.
+
+> **Tip — Kiwix Desktop:**  [Kiwix Desktop](https://kiwix.org/en/applications/kiwix-desktop/)
+> manages ZIM files through a GUI and can export a ready-made `library.xml`
+> via *Library → Export library*.  That exported file can be used directly.
+
+Each `<book>` entry needs at minimum an `id` (any UUID), `path`, and `title`.
+See [`library.xml.example`](library.xml.example) for annotated examples and
+a full attribute reference.
+
+#### 2c. Build the SQLite index
+
+```bash
+offline-search-index --library library.xml --output data/offline_index.sqlite
+```
+
+Add `--limit 50` for a quick smoke-test (indexes only 50 articles per ZIM).
 
 ### 3. Use with Claude Code (Recommended)
 
