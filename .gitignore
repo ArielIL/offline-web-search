@@ -39,7 +39,7 @@ env/
 .DS_Store
 
 # Data and databases
-data/
+/data/
 *.sqlite
 *.db
 
@@ -67,9 +67,11 @@ mcp_config.json
 .claude/
 
 # Project Specific
-data/
+/data/
 *.sqlite
 *.zim
+# ZIM fixtures committed for integration tests are the only exception:
+!tests/data/*.zim
 library.xml
 library_test.xml
 temp_library.xml
