@@ -13,6 +13,7 @@ import pytest
 
 from offline_search.kiwix import (
     fetch_page,
+    filter_content_by_prompt,
     is_port_open,
     search_kiwix_html,
     start_kiwix_server,
@@ -313,3 +314,66 @@ class TestSearchKiwixHtml:
             results = await search_kiwix_html("external", kiwix_url="http://localhost:8081")
 
         assert results[0]["url"] == "https://external.com/doc"
+
+
+# ---------------------------------------------------------------------------
+# filter_content_by_prompt
+# ---------------------------------------------------------------------------
+
+class TestFilterContentByPrompt:
+    """Tests for the dynamic filtering / content extraction function."""
+
+    _ARTICLE = (
+        "# Python asyncio Guide\n\n"
+        "Python's asyncio module provides infrastructure for writing\n"
+        "single-threaded concurrent code.\n\n"
+        "## gather\n\n"
+        "asyncio.gather() runs multiple coroutines concurrently.\n"
+        "Use it when you have several independent async tasks.\n\n"
+        "## sleep\n\n"
+        "asyncio.sleep() suspends the current coroutine for a given duration.\n\n"
+        "## Unrelated Section\n\n"
+        "This section is about database indexing and has nothing to do\n"
+        "with async programming.\n"
+    )
+
+    def test_relevant_section_returned(self):
+        """Sections matching the prompt keywords appear in output."""
+        result = filter_content_by_prompt(self._ARTICLE, "asyncio gather concurrent")
+        assert "gather" in result
+        assert "concurrent" in result
+
+    def test_irrelevant_sections_dropped(self):
+        """Sections with no keyword hits are excluded."""
+        result = filter_content_by_prompt(self._ARTICLE, "asyncio gather concurrent")
+        assert "database indexing" not in result
+
+    def test_intro_always_preserved(self):
+        """The document introduction (first block) is always included."""
+        result = filter_content_by_prompt(self._ARTICLE, "gather")
+        assert "Python asyncio Guide" in result
+
+    def test_no_prompt_returns_full_content(self):
+        """When prompt is None the full content is returned (up to max_chars)."""
+        result = filter_content_by_prompt(self._ARTICLE, None)
+        assert "Unrelated Section" in result
+
+    def test_empty_content_returns_empty(self):
+        result = filter_content_by_prompt("", "asyncio")
+        assert result == ""
+
+    def test_max_chars_respected(self):
+        """Output never exceeds max_chars."""
+        result = filter_content_by_prompt(self._ARTICLE, "asyncio", max_chars=50)
+        assert len(result) <= 50
+
+    def test_all_stop_word_prompt_still_works(self):
+        """A prompt made entirely of stop-words falls back to returning content."""
+        result = filter_content_by_prompt(self._ARTICLE, "the is a to be")
+        assert result  # should not be empty
+
+    def test_special_chars_in_prompt_stripped(self):
+        """Punctuation around keywords should not prevent matching."""
+        result = filter_content_by_prompt(self._ARTICLE, "gather,")
+        assert "gather" in result
+

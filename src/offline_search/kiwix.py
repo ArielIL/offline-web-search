@@ -97,6 +97,101 @@ def html_to_markdown(html: str, *, cap: int = 15_000) -> str:
     return cleaned[:cap]
 
 
+def filter_content_by_prompt(content: str, prompt: str, *, max_chars: int = 15_000) -> str:
+    """Extract sections of *content* that are most relevant to *prompt*.
+
+    This is the offline equivalent of Claude Code's ``web_fetch`` "dynamic
+    filtering" mechanism: instead of returning the full page verbatim, only
+    the sections that relate to the user's stated intent are included.
+    Filtering is keyword-based (no model required).
+
+    The document introduction (first block) is always preserved so the LLM
+    has context about the page.  Subsequent blocks are scored by keyword
+    overlap with the prompt and included in relevance order until
+    *max_chars* is reached.
+
+    Parameters
+    ----------
+    content:
+        Full markdown text of the page.
+    prompt:
+        User intent / extraction query (e.g. ``"how to use asyncio.gather"``).
+    max_chars:
+        Maximum number of characters to return.
+    """
+    if not prompt or not content:
+        return content[:max_chars]
+
+    # Import here to avoid a circular import at module level.
+    from .search_engine import STOP_WORDS
+
+    # Extract meaningful keywords from the prompt.
+    raw_tokens = prompt.lower().split()
+    keywords = [t.strip(".,;:!?'\"()[]{}") for t in raw_tokens if t not in STOP_WORDS]
+    if not keywords:
+        keywords = [t.strip(".,;:!?'\"()[]{}") for t in raw_tokens]  # fallback: keep all
+    keywords = [k for k in keywords if k]
+
+    if not keywords:
+        return content[:max_chars]
+
+    # Split content into blocks at blank lines or heading boundaries.
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+        elif stripped.startswith("#"):
+            if current:
+                blocks.append("\n".join(current))
+                current = []
+            current.append(line)
+        else:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+
+    if not blocks:
+        return content[:max_chars]
+
+    def _score(block: str) -> int:
+        lower = block.lower()
+        return sum(1 for kw in keywords if kw in lower)
+
+    # The first block is the document intro/title — always included first.
+    intro = blocks[0]
+    rest = blocks[1:]
+
+    # Sort remaining blocks by relevance (descending), then by original position
+    # so that equally-scored blocks appear in document order.
+    scored = sorted(enumerate(rest), key=lambda pair: -_score(pair[1]))
+
+    parts: list[str] = []
+    remaining = max_chars
+
+    if intro and remaining > 0:
+        chunk = intro[:remaining]
+        parts.append(chunk)
+        remaining -= len(chunk)
+
+    for _orig_idx, block in scored:
+        if remaining <= 0:
+            break
+        if _score(block) == 0:
+            break  # no keyword hits; skip the rest
+        chunk = block[:remaining]
+        parts.append(chunk)
+        remaining -= len(chunk)
+
+    if not parts:
+        return content[:max_chars]
+
+    return "\n\n".join(parts)[:max_chars]
+
+
 async def fetch_page(url: str, *, timeout: float = 10.0) -> str:
     """Fetch a page from Kiwix and return it as clean Markdown text.
 

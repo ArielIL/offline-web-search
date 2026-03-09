@@ -114,6 +114,35 @@ class TestVisitPageLocal:
             out = await _visit_page_local("http://k/page")
         assert "Error" in out
 
+    async def test_prompt_triggers_filtering(self):
+        """When a prompt is provided, filter_content_by_prompt is called."""
+        content = "# Title\n\nIntro text.\n\n## Relevant\n\nGather runs tasks.\n\n## Other\n\nUnrelated stuff."
+        with (
+            patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=content)),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered") as mock_filter,
+        ):
+            out = await _visit_page_local("http://k/page", prompt="gather tasks")
+        mock_filter.assert_called_once()
+        assert out == "filtered"
+
+    async def test_max_content_tokens_without_prompt_trims_content(self):
+        """max_content_tokens alone (no prompt) truncates by character count."""
+        long_content = "x" * 1000
+        with patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=long_content)):
+            out = await _visit_page_local("http://k/page", max_content_tokens=10)
+        assert len(out) <= 40  # 10 tokens * 4 chars/token
+
+    async def test_max_content_tokens_with_prompt(self):
+        """max_content_tokens is forwarded to filter_content_by_prompt as max_chars."""
+        content = "# Title\n\nIntro.\n\n## Section\n\nGather coroutines.\n"
+        with (
+            patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=content)),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="ok") as mock_filter,
+        ):
+            await _visit_page_local("http://k/page", prompt="gather", max_content_tokens=100)
+        _, kwargs = mock_filter.call_args
+        assert kwargs.get("max_chars") == 400  # 100 tokens * 4
+
 
 # ---------------------------------------------------------------------------
 # _google_search_remote
@@ -298,6 +327,44 @@ class TestVisitPageRemote:
 
         assert "Error" in out
 
+    async def test_prompt_triggers_filtering(self):
+        """When a prompt is given, filter_content_by_prompt is applied to the content."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/plain"}
+        mock_resp.text = "# Title\n\nIntro.\n\n## Section\n\nGather tasks."
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered") as mock_filter,
+        ):
+            out = await _visit_page_remote("http://remote/page", prompt="gather tasks")
+
+        mock_filter.assert_called_once()
+        assert out == "filtered"
+
+    async def test_max_content_tokens_respected(self):
+        """max_content_tokens * 4 is used as the character cap."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/plain"}
+        mock_resp.text = "x" * 10_000
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            out = await _visit_page_remote("http://remote/page", max_content_tokens=100)
+
+        assert len(out) <= 400  # 100 tokens * 4 chars
+
 
 # ---------------------------------------------------------------------------
 # Mode dispatch (google_search / visit_page)
@@ -328,6 +395,15 @@ class TestModeDispatch:
             result = await visit_page("http://u")
         assert result == "local"
 
+    async def test_visit_page_forwards_prompt_and_tokens_local(self):
+        """prompt and max_content_tokens are forwarded to the local impl."""
+        with (
+            patch("offline_search.mcp.settings", MagicMock(is_remote=False)),
+            patch("offline_search.mcp._visit_page_local", new=AsyncMock(return_value="local")) as m,
+        ):
+            await visit_page("http://u", prompt="gather", max_content_tokens=200)
+        m.assert_called_once_with("http://u", prompt="gather", max_content_tokens=200)
+
     async def test_visit_page_dispatches_remote(self):
         with (
             patch("offline_search.mcp.settings", MagicMock(is_remote=True)),
@@ -335,6 +411,15 @@ class TestModeDispatch:
         ):
             result = await visit_page("http://u")
         assert result == "remote"
+
+    async def test_visit_page_forwards_prompt_and_tokens_remote(self):
+        """prompt and max_content_tokens are forwarded to the remote impl."""
+        with (
+            patch("offline_search.mcp.settings", MagicMock(is_remote=True)),
+            patch("offline_search.mcp._visit_page_remote", new=AsyncMock(return_value="remote")) as m,
+        ):
+            await visit_page("http://u", prompt="gather", max_content_tokens=200)
+        m.assert_called_once_with("http://u", prompt="gather", max_content_tokens=200)
 
 
 # ---------------------------------------------------------------------------

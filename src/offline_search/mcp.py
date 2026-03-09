@@ -26,7 +26,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import settings
-from .kiwix import fetch_page, html_to_markdown, search_kiwix_html, start_kiwix_server
+from .kiwix import fetch_page, filter_content_by_prompt, html_to_markdown, search_kiwix_html, start_kiwix_server
 from .search_engine import search
 
 logger = logging.getLogger(__name__)
@@ -72,18 +72,33 @@ async def google_search(
 
 
 @mcp.tool()
-async def visit_page(url: str) -> str:
+async def visit_page(
+    url: str,
+    prompt: str | None = None,
+    max_content_tokens: int | None = None,
+) -> str:
     """Fetch the full content of a page from the offline documentation library.
 
     Use this after ``google_search`` when you need to read the complete
     article text rather than just the snippet.
 
+    When *prompt* is provided, only the sections of the page most relevant to
+    that intent are returned (dynamic filtering).  This mirrors the ``prompt``
+    parameter of Claude Code's ``web_fetch`` tool and prevents context bloat
+    in multi-turn conversations by discarding unrelated sections.
+
     Args:
         url: The URL of the page to visit (as returned by google_search).
+        prompt: Optional description of the information you want to extract
+                (e.g. ``"how to configure connection pooling"``).  When
+                omitted the full page content is returned.
+        max_content_tokens: Optional cap on the number of tokens returned.
+                Approximately 4 characters per token.  Defaults to ~15,000
+                characters (≈ 3,750 tokens) when not specified.
     """
     if settings.is_remote:
-        return await _visit_page_remote(url)
-    return await _visit_page_local(url)
+        return await _visit_page_remote(url, prompt=prompt, max_content_tokens=max_content_tokens)
+    return await _visit_page_local(url, prompt=prompt, max_content_tokens=max_content_tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -121,11 +136,21 @@ async def _google_search_local(
         return f"Error executing offline search: {e}"
 
 
-async def _visit_page_local(url: str) -> str:
+async def _visit_page_local(
+    url: str,
+    *,
+    prompt: str | None = None,
+    max_content_tokens: int | None = None,
+) -> str:
     try:
         content = await fetch_page(url)
         if not content:
             return "Page returned empty content."
+        if prompt:
+            max_chars = (max_content_tokens * 4) if max_content_tokens else 15_000
+            return filter_content_by_prompt(content, prompt, max_chars=max_chars)
+        if max_content_tokens:
+            return content[: max_content_tokens * 4]
         return content
     except Exception as e:
         logger.exception("visit_page (local) failed for url=%s", url)
@@ -182,17 +207,27 @@ async def _google_search_remote(
         return f"Error executing search: {e}"
 
 
-async def _visit_page_remote(url: str) -> str:
+async def _visit_page_remote(
+    url: str,
+    *,
+    prompt: str | None = None,
+    max_content_tokens: int | None = None,
+) -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
 
+        max_chars = (max_content_tokens * 4) if max_content_tokens else 15_000
         content_type = resp.headers.get("content-type", "")
         if "html" in content_type:
-            return html_to_markdown(resp.text)
+            content = html_to_markdown(resp.text, cap=max_chars)
         else:
-            return resp.text[:15_000]
+            content = resp.text[:max_chars]
+
+        if prompt and content:
+            return filter_content_by_prompt(content, prompt, max_chars=max_chars)
+        return content
     except Exception as e:
         logger.exception("visit_page (remote) failed for url=%s", url)
         return f"Error fetching page: {e}"
