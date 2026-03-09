@@ -8,7 +8,7 @@ Whether it's a bug fix, a new feature, a documentation update, or even just fixi
 
 ### 1. Reporting Bugs and Requesting Features
 
-If you find a bug or have an idea for a feature, please [open an issue](https://www.google.com/search?q=https://github.com/ArielIL/offline-web-search/issues) first.
+If you find a bug or have an idea for a feature, please [open an issue](https://github.com/ArielIL/offline-web-search/issues) first.
 
 * **Bugs:** Please include steps to reproduce, the expected behavior, and what actually happened. Logs and environment details (OS, Python version) are incredibly helpful.
 * **Features:** Explain why the feature is needed and how it fits into the broader goal of making this a seamless, offline `Google Search` alternative for LLMs.
