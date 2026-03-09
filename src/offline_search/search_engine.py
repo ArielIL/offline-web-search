@@ -154,6 +154,8 @@ def search_sync(
     limit: int | None = None,
     db_path: Path | None = None,
     zim_filter: str | None = None,
+    allowed_zims: list[str] | None = None,
+    blocked_zims: list[str] | None = None,
 ) -> list[SearchResult]:
     """Run a full-text search against the SQLite FTS5 index (blocking).
 
@@ -166,7 +168,13 @@ def search_sync(
     db_path:
         Override the database path (useful for testing).
     zim_filter:
-        If set, restrict results to this ``zim_name``.
+        If set, restrict results to this single ``zim_name``.
+    allowed_zims:
+        If set, restrict results to ZIM archives in this list (allowlist).
+        Mirrors the ``allowed_domains`` parameter of Claude Code's web search tool.
+    blocked_zims:
+        If set, exclude results from ZIM archives in this list (blocklist).
+        Mirrors the ``blocked_domains`` parameter of Claude Code's web search tool.
     """
     limit = limit or settings.search_default_limit
     db = db_path or settings.db_path
@@ -200,6 +208,16 @@ def search_sync(
         if zim_filter:
             sql += " AND zim_name = ?"
             params.append(zim_filter)
+
+        if allowed_zims:
+            placeholders = ",".join("?" * len(allowed_zims))
+            sql += f" AND zim_name IN ({placeholders})"
+            params.extend(allowed_zims)
+
+        if blocked_zims:
+            placeholders = ",".join("?" * len(blocked_zims))
+            sql += f" AND zim_name NOT IN ({placeholders})"
+            params.extend(blocked_zims)
 
         sql += " ORDER BY score LIMIT ?"
         params.append(overfetch)

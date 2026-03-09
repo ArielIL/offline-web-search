@@ -24,6 +24,11 @@ def _result(title: str = "Python Docs", url: str = "docs/python.html") -> Search
     )
 
 
+def _get_mock_call_params(mock_call) -> dict:
+    """Extract the ``params`` keyword argument from a mock call."""
+    return mock_call.kwargs.get("params") or mock_call.args[1]
+
+
 # We need to import the private functions. They live in mcp.py which also
 # instantiates a FastMCP server at module-level.  That's fine for tests.
 from offline_search.mcp import (
@@ -49,6 +54,20 @@ class TestGoogleSearchLocal:
             out = await _google_search_local("python")
         assert "Python Docs" in out
         assert "Snippet" in out
+
+    async def test_allowed_zims_passed_to_search(self):
+        """allowed_zims is forwarded to the underlying search function."""
+        r = _result()
+        with patch("offline_search.mcp.search", new=AsyncMock(return_value=[r])) as mock_search:
+            await _google_search_local("python", allowed_zims=["python_docs"])
+        mock_search.assert_called_once_with("python", allowed_zims=["python_docs"], blocked_zims=None)
+
+    async def test_blocked_zims_passed_to_search(self):
+        """blocked_zims is forwarded to the underlying search function."""
+        r = _result()
+        with patch("offline_search.mcp.search", new=AsyncMock(return_value=[r])) as mock_search:
+            await _google_search_local("python", blocked_zims=["stackoverflow"])
+        mock_search.assert_called_once_with("python", allowed_zims=None, blocked_zims=["stackoverflow"])
 
     async def test_fallback_to_kiwix_html(self):
         html_hits = [{"title": "HTML Hit", "url": "http://k/page", "snippet": "s"}]
@@ -176,6 +195,40 @@ class TestGoogleSearchRemote:
             out = await _google_search_remote("fail")
 
         assert "Error" in out
+
+    async def test_allowed_zims_sent_as_params(self):
+        """allowed_zims is included in the HTTP request params."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            await _google_search_remote("python", allowed_zims=["python_docs"])
+
+        sent_params = _get_mock_call_params(mock_client.get.call_args)
+        assert "allowed_zims" in sent_params
+
+    async def test_blocked_zims_sent_as_params(self):
+        """blocked_zims is included in the HTTP request params."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            await _google_search_remote("python", blocked_zims=["stackoverflow"])
+
+        sent_params = _get_mock_call_params(mock_client.get.call_args)
+        assert "blocked_zims" in sent_params
 
 
 # ---------------------------------------------------------------------------

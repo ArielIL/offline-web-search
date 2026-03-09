@@ -39,7 +39,11 @@ mcp = FastMCP("offline-search")
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def google_search(query: str) -> str:
+async def google_search(
+    query: str,
+    allowed_zims: list[str] | None = None,
+    blocked_zims: list[str] | None = None,
+) -> str:
     """Performs a full-text search across the offline documentation library.
 
     Use this tool whenever you need to look up documentation, API references,
@@ -52,10 +56,19 @@ async def google_search(query: str) -> str:
     Args:
         query: Search keywords — be specific (e.g. 'python asyncio gather',
                'sqlite fts5 syntax', 'react useEffect cleanup').
+        allowed_zims: Optional list of ZIM archive names to restrict results to
+                      (e.g. ['python_docs', 'devdocs']). Mirrors the
+                      ``allowed_domains`` parameter of Claude Code's web search
+                      tool. When provided, only results from these archives are
+                      returned.
+        blocked_zims: Optional list of ZIM archive names to exclude from results
+                      (e.g. ['stackoverflow']). Mirrors the ``blocked_domains``
+                      parameter of Claude Code's web search tool. When provided,
+                      results from these archives are suppressed.
     """
     if settings.is_remote:
-        return await _google_search_remote(query)
-    return await _google_search_local(query)
+        return await _google_search_remote(query, allowed_zims=allowed_zims, blocked_zims=blocked_zims)
+    return await _google_search_local(query, allowed_zims=allowed_zims, blocked_zims=blocked_zims)
 
 
 @mcp.tool()
@@ -77,9 +90,14 @@ async def visit_page(url: str) -> str:
 # Local-mode implementations
 # ---------------------------------------------------------------------------
 
-async def _google_search_local(query: str) -> str:
+async def _google_search_local(
+    query: str,
+    *,
+    allowed_zims: list[str] | None = None,
+    blocked_zims: list[str] | None = None,
+) -> str:
     try:
-        results = await search(query)
+        results = await search(query, allowed_zims=allowed_zims, blocked_zims=blocked_zims)
 
         if results:
             lines = [r.format_for_llm(settings.kiwix_url) for r in results]
@@ -118,12 +136,22 @@ async def _visit_page_local(url: str) -> str:
 # Remote-mode implementations
 # ---------------------------------------------------------------------------
 
-async def _google_search_remote(query: str) -> str:
+async def _google_search_remote(
+    query: str,
+    *,
+    allowed_zims: list[str] | None = None,
+    blocked_zims: list[str] | None = None,
+) -> str:
     try:
+        params: dict[str, object] = {"q": query, "limit": settings.search_default_limit}
+        if allowed_zims:
+            params["allowed_zims"] = allowed_zims
+        if blocked_zims:
+            params["blocked_zims"] = blocked_zims
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(
                 f"{settings.search_api_url}/search",
-                params={"q": query, "limit": settings.search_default_limit},
+                params=params,
             )
 
             if resp.status_code == 200:

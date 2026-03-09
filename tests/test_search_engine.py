@@ -118,6 +118,49 @@ class TestSearchSync:
         for r in results:
             assert r.zim_name == "devdocs"
 
+    def test_allowed_zims_single(self, tmp_db):
+        """allowed_zims with one entry restricts results to that ZIM."""
+        results = search_sync("python", db_path=tmp_db, allowed_zims=["python_docs"])
+        assert len(results) > 0
+        for r in results:
+            assert r.zim_name == "python_docs"
+
+    def test_allowed_zims_multiple(self, tmp_db):
+        """allowed_zims with multiple entries restricts to those ZIMs only."""
+        results = search_sync("python", db_path=tmp_db, allowed_zims=["python_docs", "devdocs"])
+        assert len(results) > 0
+        for r in results:
+            assert r.zim_name in {"python_docs", "devdocs"}
+
+    def test_allowed_zims_none_no_filter(self, tmp_db):
+        """allowed_zims=None applies no ZIM filtering."""
+        all_results = search_sync("python", db_path=tmp_db)
+        filtered_results = search_sync("python", db_path=tmp_db, allowed_zims=None)
+        assert len(all_results) == len(filtered_results)
+
+    def test_blocked_zims_excludes_sources(self, tmp_db):
+        """blocked_zims excludes the listed ZIM archives from results."""
+        results = search_sync("python", db_path=tmp_db, blocked_zims=["python_docs"])
+        for r in results:
+            assert r.zim_name != "python_docs"
+
+    def test_blocked_zims_multiple(self, tmp_db):
+        """blocked_zims with multiple entries excludes all of them."""
+        results = search_sync("python", db_path=tmp_db, blocked_zims=["python_docs", "devdocs"])
+        for r in results:
+            assert r.zim_name not in {"python_docs", "devdocs"}
+
+    def test_allowed_and_blocked_zims_combined(self, tmp_db):
+        """allowed_zims and blocked_zims can be combined; blocked takes precedence."""
+        results = search_sync(
+            "python",
+            db_path=tmp_db,
+            allowed_zims=["python_docs", "devdocs"],
+            blocked_zims=["devdocs"],
+        )
+        for r in results:
+            assert r.zim_name == "python_docs"
+
     def test_synonym_expansion_js(self, tmp_db):
         """Searching 'javascript' should find JS content, and 'js' should expand."""
         # Direct search for javascript should work
