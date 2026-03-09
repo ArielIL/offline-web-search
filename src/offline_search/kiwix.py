@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 from .config import settings
+from .search_engine import STOP_WORDS
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +123,13 @@ def filter_content_by_prompt(content: str, prompt: str, *, max_chars: int = 15_0
     if not prompt or not content:
         return content[:max_chars]
 
-    # Import here to avoid a circular import at module level.
-    from .search_engine import STOP_WORDS
-
     # Extract meaningful keywords from the prompt.
-    raw_tokens = prompt.lower().split()
-    keywords = [t.strip(".,;:!?'\"()[]{}") for t in raw_tokens if t not in STOP_WORDS]
+    # Strip punctuation *before* the stop-word check so that "the," is
+    # correctly identified as the stop word "the" rather than slipping through.
+    stripped_tokens = [t.strip(".,;:!?'\"()[]{}") for t in prompt.lower().split()]
+    keywords = [t for t in stripped_tokens if t and t not in STOP_WORDS]
     if not keywords:
-        keywords = [t.strip(".,;:!?'\"()[]{}") for t in raw_tokens]  # fallback: keep all
-    keywords = [k for k in keywords if k]
+        keywords = [t for t in stripped_tokens if t]  # fallback: keep all
 
     if not keywords:
         return content[:max_chars]

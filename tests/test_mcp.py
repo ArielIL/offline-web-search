@@ -365,6 +365,31 @@ class TestVisitPageRemote:
 
         assert len(out) <= 400  # 100 tokens * 4 chars
 
+    async def test_prompt_with_small_tokens_uses_full_initial_cap(self):
+        """When prompt is given, html_to_markdown should receive the full 15k cap
+        so the filter can score all sections, not just a pre-truncated slice."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/html"}
+        mock_resp.text = "<html><body><h1>Title</h1><p>Body</p></body></html>"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client),
+            patch("offline_search.mcp.html_to_markdown", return_value="converted") as mock_md,
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered"),
+        ):
+            await _visit_page_remote("http://remote/page", prompt="title", max_content_tokens=10)
+
+        # The initial markdown conversion must use 15_000 (full budget), not 40 (10 * 4),
+        # so the filter receives the complete content to work from.
+        _, kwargs = mock_md.call_args
+        assert kwargs.get("cap") == 15_000
+
 
 # ---------------------------------------------------------------------------
 # Mode dispatch (google_search / visit_page)

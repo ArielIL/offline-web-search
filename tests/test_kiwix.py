@@ -377,3 +377,22 @@ class TestFilterContentByPrompt:
         result = filter_content_by_prompt(self._ARTICLE, "gather,")
         assert "gather" in result
 
+    def test_punctuated_stop_word_not_used_as_keyword(self):
+        """A stop word with trailing punctuation should be excluded after stripping.
+
+        Bug being guarded: previously punctuation was stripped *after* the
+        stop-word check, so ``"to,"`` (which differs from ``"to"``) would pass
+        the check and end up as keyword ``"to"`` — matching nearly every block.
+        """
+        content = (
+            "# Intro\n\nIntro text.\n\n"
+            "## Gather\n\nUse gather to run tasks.\n\n"
+            "## Sleep\n\nUse sleep to wait.\n\n"
+            "## Other\n\nUnrelated APIs only.\n"
+        )
+        # "to," should be treated as stop word "to" and excluded.
+        # Only "gather" remains as a real keyword, so Sleep must not appear.
+        result = filter_content_by_prompt(content, "gather, to,")
+        assert "Gather" in result
+        assert "Sleep" not in result
+

@@ -219,11 +219,15 @@ async def _visit_page_remote(
             resp.raise_for_status()
 
         max_chars = (max_content_tokens * 4) if max_content_tokens else 15_000
+        # When a prompt is given, convert the full page first so the filter can
+        # score all sections before trimming.  Without a prompt the single cap is
+        # enough since the full content is returned directly.
+        initial_cap = 15_000 if prompt else max_chars
         content_type = resp.headers.get("content-type", "")
         if "html" in content_type:
-            content = html_to_markdown(resp.text, cap=max_chars)
+            content = html_to_markdown(resp.text, cap=initial_cap)
         else:
-            content = resp.text[:max_chars]
+            content = resp.text[:initial_cap]
 
         if prompt and content:
             return filter_content_by_prompt(content, prompt, max_chars=max_chars)
