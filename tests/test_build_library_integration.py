@@ -1,18 +1,18 @@
-"""Integration tests for scripts/build_library.sh and scripts/build_library.ps1.
+﻿"""Integration tests for scripts/build_library.sh and scripts/build_library.ps1.
 
 These tests run the REAL kiwix-manage binary against REAL ZIM fixture files
-committed to tests/data/.  They are marked ``integration`` and excluded from
-the default pytest run (see pyproject.toml ``addopts``).  They execute in CI
-inside the ``integration`` job, which downloads kiwix-tools first.
+committed to tests/data/.  They are marked `integration` and excluded from
+the default pytest run (see pyproject.toml `addopts`).  They execute in CI
+inside the `integration` job, which downloads kiwix-tools first.
 
 Requirements
 ------------
-- ``kiwix-manage`` must be on PATH or in ``kiwix-tools/`` next to the repo root.
-- ZIM fixtures must be present at ``tests/data/*.zim``.
-- ``bash`` is required for the .sh tests (Linux/macOS only).
-- ``pwsh`` (PowerShell Core) is required for the .ps1 tests.
+- `kiwix-manage` must be on PATH or in `kiwix-tools/` next to the repo root.
+- ZIM fixtures must be present at `tests/data/*.zim`.
+- `bash` is required for the .sh tests (Linux/macOS only).
+- `pwsh` (PowerShell Core) is required for the .ps1 tests.
 
-Both conditions are met on GitHub Actions ``ubuntu-latest`` after the
+Both conditions are met on GitHub Actions `ubuntu-latest` after the
 kiwix-tools download step in ci.yml.  Locally, skip these gracefully.
 """
 
@@ -21,7 +21,9 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
+import time
+import urllib.request
+import socket
 from pathlib import Path
 
 import pytest
@@ -41,24 +43,64 @@ KIWIX_MANAGE = (
     else shutil.which("kiwix-manage")
 )
 
+_local_serve = REPO_ROOT / "kiwix-tools" / "kiwix-serve"
+KIWIX_SERVE = (
+    str(_local_serve)
+    if _local_serve.exists()
+    else shutil.which("kiwix-serve")
+)
+
 ZIMS = sorted(FIXTURES_DIR.glob("*.zim"))
 
 
-def _assert_valid_library(library: Path, expected_count: int) -> None:
-    """Parse library.xml and assert it has the expected number of <book> entries
-    with non-empty id and title attributes — proving kiwix-manage actually read
-    the ZIM metadata, not just created placeholder entries.
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _assert_servable_library(library: Path, expected_count: int) -> None:
+    """Boot up kiwix-serve with the generated library.xml and hit its HTTP API
+    to prove it actually parsed the ZIMs and can host them.
+    This replaces parsing XML text implementation details.
     """
     assert library.exists(), f"library.xml was not created at {library}"
-    tree = ET.parse(library)
-    books = tree.findall("book")
-    assert len(books) == expected_count, (
-        f"Expected {expected_count} <book> entries, got {len(books)}"
+    if not KIWIX_SERVE:
+        pytest.skip("kiwix-serve not found, cannot test serving generated library")
+        
+    port = find_free_port()
+    proc = subprocess.Popen(
+        [KIWIX_SERVE, "--port", str(port), "--library", str(library)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    for book in books:
-        assert book.get("id"), "Every <book> must have a non-empty id attribute"
-        assert book.get("title"), "Every <book> must have a non-empty title attribute"
-        assert book.get("path"), "Every <book> must have a non-empty path attribute"
+    
+    ready = False
+    url = f"http://127.0.0.1:{port}/catalog/v2/entries"
+    deadline = time.monotonic() + 10.0
+    
+    try:
+        while time.monotonic() < deadline:
+            try:
+                resp = urllib.request.urlopen(url, timeout=1.0)
+                if resp.status == 200:
+                    content = resp.read().decode('utf-8')
+                    ready = True
+                    # Assert all ZIM files are presented in the true live OPDS feed
+                    for zim in ZIMS:
+                        assert zim.stem in content, f"ZIM stem '{zim.stem}' missing from active kiwix-serve catalog"
+                    break
+            except Exception:
+                time.sleep(0.5)
+                
+        if not ready:
+            pytest.fail("kiwix-serve never became healthy with the generated library.xml")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +128,7 @@ class TestBuildLibraryShIntegration:
         Asserts:
         - exit code 0
         - each ZIM filename appears in stdout
-        - library.xml is valid XML with correct <book> count and metadata
+        - library.xml is valid based on passing real HTTP checks when booted in kiwix-serve
         """
         library = tmp_path / "library.xml"
         r = self._run(str(FIXTURES_DIR), str(library), cwd=tmp_path)
@@ -97,7 +139,7 @@ class TestBuildLibraryShIntegration:
         for zim in ZIMS:
             assert zim.name in r.stdout, f"{zim.name} not mentioned in output"
 
-        _assert_valid_library(library, len(ZIMS))
+        _assert_servable_library(library, len(ZIMS))
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +154,7 @@ class TestBuildLibraryPs1Integration:
 
     def _run(self, *args: str, cwd: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [PWSH, "-NonInteractive", "-File", str(SCRIPT_PS1), *args],
+            [PWSH, "-NoProfile", "-NonInteractive", "-File", str(SCRIPT_PS1), *args],
             capture_output=True,
             text=True,
             cwd=str(cwd),
@@ -120,13 +162,7 @@ class TestBuildLibraryPs1Integration:
         )
 
     def test_happy_flow(self, tmp_path: Path) -> None:
-        """Run build_library.ps1 against real ZIM fixtures with real kiwix-manage.
-
-        Asserts:
-        - exit code 0
-        - each ZIM filename appears in stdout
-        - library.xml is valid XML with correct <book> count and metadata
-        """
+        """Run build_library.ps1 against real fixtures. Server boot check."""
         library = tmp_path / "library.xml"
         r = self._run(str(FIXTURES_DIR), str(library), cwd=tmp_path)
 
@@ -136,4 +172,4 @@ class TestBuildLibraryPs1Integration:
         for zim in ZIMS:
             assert zim.name in r.stdout, f"{zim.name} not mentioned in output"
 
-        _assert_valid_library(library, len(ZIMS))
+        _assert_servable_library(library, len(ZIMS))

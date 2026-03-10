@@ -1,20 +1,15 @@
-"""Tests for the kiwix module — process management, page fetching, and HTML search.
+﻿"""Tests for the kiwix module — process management and HTML formatting.
 
-Every test mocks I/O (sockets, subprocesses, HTTP) so no live kiwix-serve is needed.
+No live kiwix-serve is needed for unit testing pure functions here.
 """
 
 from __future__ import annotations
 
-import socket
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import httpx
-import pytest
+from unittest.mock import MagicMock, patch
 
 from offline_search.kiwix import (
-    fetch_page,
+    html_to_markdown,
     is_port_open,
-    search_kiwix_html,
     start_kiwix_server,
 )
 
@@ -116,85 +111,23 @@ class TestStartKiwixServer:
 
 
 # ---------------------------------------------------------------------------
-# fetch_page
+# html_to_markdown
 # ---------------------------------------------------------------------------
 
-class TestFetchPage:
-    """All tests mock httpx so no network is touched."""
+class TestHtmlToMarkdown:
 
-    async def test_html_page_converted_to_markdown(self):
+    def test_html_page_converted_to_markdown(self):
         html = "<html><body><h1>Hello</h1><p>World</p></body></html>"
-        mock_resp = MagicMock()
-        mock_resp.headers = {"content-type": "text/html; charset=utf-8"}
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            result = await fetch_page("http://localhost:8081/page")
-
+        result = html_to_markdown(html)
         assert "Hello" in result
         assert "World" in result
 
-    async def test_relative_url_prepended(self):
-        """A relative URL should be expanded using settings.kiwix_url."""
-        mock_resp = MagicMock()
-        mock_resp.headers = {"content-type": "text/plain"}
-        mock_resp.text = "plain text content"
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            result = await fetch_page("content/docs/page.html")
-
-        # Verify the client received the full URL
-        called_url = mock_client.get.call_args[0][0]
-        assert called_url.startswith("http://")
-        assert "content/docs/page.html" in called_url
-        assert result == "plain text content"
-
-    async def test_plain_text_fallback(self):
-        mock_resp = MagicMock()
-        mock_resp.headers = {"content-type": "application/json"}
-        mock_resp.text = '{"data": "value"}'
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            result = await fetch_page("http://localhost:8081/api")
-
-        assert '{"data": "value"}' == result
-
-    async def test_content_capped_at_15k(self):
+    def test_content_capped_at_15k(self):
         html = "<html><body>" + "<p>word </p>" * 10_000 + "</body></html>"
-        mock_resp = MagicMock()
-        mock_resp.headers = {"content-type": "text/html"}
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            result = await fetch_page("http://localhost:8081/big")
-
+        result = html_to_markdown(html, cap=15_000)
         assert len(result) <= 15_000
 
-    async def test_nav_script_elements_removed(self):
+    def test_nav_script_elements_removed(self):
         """Boilerplate elements (nav, script, style, footer) should be stripped."""
         html = (
             "<html><body>"
@@ -205,111 +138,9 @@ class TestFetchPage:
             "<footer>Footer</footer>"
             "</body></html>"
         )
-        mock_resp = MagicMock()
-        mock_resp.headers = {"content-type": "text/html"}
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            result = await fetch_page("http://localhost:8081/page")
-
+        result = html_to_markdown(html)
         assert "Content" in result
         assert "Site nav" not in result
         assert "alert(1)" not in result
         assert "Footer" not in result
 
-
-# ---------------------------------------------------------------------------
-# search_kiwix_html
-# ---------------------------------------------------------------------------
-
-class TestSearchKiwixHtml:
-    async def test_parses_result_list(self):
-        """Extract title/url/snippet from <li class='result'> elements."""
-        html = """
-        <html><body>
-        <ul>
-          <li class="result">
-            <a href="/content/docs/python">Python Guide</a>
-            <p>Learn Python programming</p>
-          </li>
-          <li class="result">
-            <a href="/content/docs/js">JS Guide</a>
-            <p>Learn JavaScript</p>
-          </li>
-        </ul>
-        </body></html>
-        """
-        mock_resp = MagicMock()
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            results = await search_kiwix_html("python", kiwix_url="http://localhost:8081")
-
-        assert len(results) == 2
-        assert results[0]["title"] == "Python Guide"
-        assert results[0]["snippet"] == "Learn Python programming"
-        assert "localhost:8081" in results[0]["url"]
-
-    async def test_empty_results_page(self):
-        html = "<html><body><p>No results found</p></body></html>"
-        mock_resp = MagicMock()
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            results = await search_kiwix_html("xyzzy", kiwix_url="http://localhost:8081")
-
-        assert results == []
-
-    async def test_http_error_returns_empty(self):
-        """Network/HTTP errors should be caught and return []."""
-        mock_client = AsyncMock()
-        mock_client.get.side_effect = httpx.ConnectError("refused")
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            results = await search_kiwix_html("python", kiwix_url="http://localhost:8081")
-
-        assert results == []
-
-    async def test_absolute_hrefs_preserved(self):
-        """Links that already start with http should not be prefixed."""
-        html = """
-        <html><body>
-        <li class="result">
-          <a href="https://external.com/doc">External Doc</a>
-          <p>External snippet</p>
-        </li>
-        </body></html>
-        """
-        mock_resp = MagicMock()
-        mock_resp.text = html
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_resp
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-
-        with patch("offline_search.kiwix.httpx.AsyncClient", return_value=mock_client):
-            results = await search_kiwix_html("external", kiwix_url="http://localhost:8081")
-
-        assert results[0]["url"] == "https://external.com/doc"

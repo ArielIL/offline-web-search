@@ -41,14 +41,16 @@ from offline_search.mcp import (
 # ---------------------------------------------------------------------------
 
 class TestGoogleSearchLocal:
-    async def test_fts5_results(self):
-        r = _result()
-        with (
-            patch("offline_search.mcp.search", new=AsyncMock(return_value=[r])),
-        ):
+    async def test_fts5_results(self, tmp_db):
+        from offline_search.config import settings
+        original_db = settings.db_path
+        settings.db_path = tmp_db
+        try:
             out = await _google_search_local("python")
-        assert "Python Docs" in out
-        assert "Snippet" in out
+            assert "Python Tutorial" in out
+            assert "Learn **Python**" in out
+        finally:
+            settings.db_path = original_db
 
     async def test_fallback_to_kiwix_html(self):
         html_hits = [{"title": "HTML Hit", "url": "http://k/page", "snippet": "s"}]
@@ -60,14 +62,19 @@ class TestGoogleSearchLocal:
             out = await _google_search_local("react")
         assert "HTML Hit" in out
 
-    async def test_no_results(self):
-        with (
-            patch("offline_search.mcp.search", new=AsyncMock(return_value=[])),
-            patch("offline_search.mcp.search_kiwix_html", new=AsyncMock(return_value=[])),
-            patch("offline_search.mcp.start_kiwix_server"),
-        ):
-            out = await _google_search_local("xyzzy")
-        assert "No results found" in out
+    async def test_no_results(self, tmp_db):
+        from offline_search.config import settings
+        original_db = settings.db_path
+        settings.db_path = tmp_db
+        try:
+            with (
+                patch("offline_search.mcp.search_kiwix_html", new=AsyncMock(return_value=[])),
+                patch("offline_search.mcp.start_kiwix_server"),
+            ):
+                out = await _google_search_local("xyzzy")
+            assert "No results found" in out
+        finally:
+            settings.db_path = original_db
 
     async def test_exception_handled(self):
         with patch("offline_search.mcp.search", new=AsyncMock(side_effect=RuntimeError("boom"))):
