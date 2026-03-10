@@ -32,6 +32,15 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
 
     Each dict has keys: ``namespace``, ``url``, ``title``, ``content``.
     """
+    import sys
+    from unittest.mock import MagicMock
+
+    # Prevent zimply from monkeypatching the entire process via gevent
+    if "gevent" not in sys.modules:
+        sys.modules["gevent"] = MagicMock()
+        sys.modules["gevent.monkey"] = MagicMock()
+        sys.modules["gevent.pywsgi"] = MagicMock()
+
     from zimply.zimply import ZIMFile
 
     zim = ZIMFile(str(zim_path), "utf-8")
