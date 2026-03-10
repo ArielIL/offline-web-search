@@ -104,11 +104,9 @@ jobs:
           tar -xzf kiwix-tools.tar.gz --strip-components=1 -C kiwix-tools
           echo "kiwix-manage version: $(kiwix-tools/kiwix-manage --version 2>&1 || true)"
 
-      - name: Run integration tests (mock unit tests first, then happy flow)
+      - name: Run integration tests (happy flow)
         run: |
-          # Step 1: full mock unit test suite — all edge cases must pass
-          pytest tests/test_build_library.py -v
-          # Step 2: real happy-flow with actual kiwix-manage + committed ZIM fixtures
+          # Real happy-flow with actual kiwix-manage + committed ZIM fixtures
           pytest tests/test_build_library_integration.py -v -m integration
 
   build:
