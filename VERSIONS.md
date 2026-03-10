@@ -1,5 +1,11 @@
 # System Version Documentation
-*Generated on February 02, 2026*
+*Generated on March 10, 2026*
+
+## Release Notes
+
+### Hotfix / E2E Update
+- Handled a bug in `indexer.py` where Kiwix serve default mount generation was disjointed against `offline-search` URL generation. Swapped indexing parser from `library.xml`'s `name` to the underlying SQLite physical `zim.stem`. 
+- Overhauled testing methodology. Removed pure mocks and replaced them with robust full E2E pipeline and functional HTTP testing tests (`test_e2e_journey.py`, `test_build_library_integration.py`).
 
 This document lists the exact versions of all tools and libraries used to validate and run the Offline Search system. Use these versions to ensure maximum compatibility in air-gapped environments.
 

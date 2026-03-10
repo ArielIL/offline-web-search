@@ -203,7 +203,7 @@ class TestLoadLibrary:
 
         entries = list(load_library(lib_xml))
         assert len(entries) == 2
-        assert entries[0]["zim_name"] == "python_docs"
+        assert entries[0]["zim_name"] == "python"
         assert entries[0]["tags"] == "python;docs"
         assert entries[0]["zim_path"] == (tmp_path / "python.zim").resolve()
 

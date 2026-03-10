@@ -225,7 +225,8 @@ def load_library(library_path: Path) -> Iterable[dict[str, Any]]:
         if not path_attr:
             continue
         zim_path = (library_dir / path_attr).resolve()
-        zim_name = book.get("name") or zim_path.stem
+        # kiwix-serve uses the filename stem (without .zim) for the URL mount point
+        zim_name = zim_path.stem
         tags = book.get("tags", "")
         yield {"zim_name": zim_name, "zim_path": zim_path, "tags": tags}
 
