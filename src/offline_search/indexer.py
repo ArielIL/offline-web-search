@@ -40,6 +40,10 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
         sys.modules["gevent"] = MagicMock()
         sys.modules["gevent.monkey"] = MagicMock()
         sys.modules["gevent.pywsgi"] = MagicMock()
+    
+    # pkg_resources was removed in python 3.12, zimply uses it for an unused falcon template
+    if "pkg_resources" not in sys.modules:
+        sys.modules["pkg_resources"] = MagicMock()
 
     from zimply.zimply import ZIMFile
 
