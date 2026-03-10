@@ -66,12 +66,14 @@ async def search_endpoint(
     q: str = Query(..., description="Search query"),
     limit: int = Query(10, ge=1, le=100, description="Max results"),
     zim: str | None = Query(None, description="Filter by ZIM source name"),
+    allowed_zims: list[str] | None = Query(None, description="Restrict to these ZIM sources (allowlist)"),
+    blocked_zims: list[str] | None = Query(None, description="Exclude these ZIM sources (blocklist)"),
 ):
     """Full-text search across the offline index."""
     if not q.strip():
         raise HTTPException(status_code=400, detail="Empty query")
 
-    results = search_sync(q, limit=limit, zim_filter=zim)
+    results = search_sync(q, limit=limit, zim_filter=zim, allowed_zims=allowed_zims, blocked_zims=blocked_zims)
     return [r.to_dict() for r in results]
 
 

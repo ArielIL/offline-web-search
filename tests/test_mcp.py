@@ -24,6 +24,11 @@ def _result(title: str = "Python Docs", url: str = "docs/python.html") -> Search
     )
 
 
+def _get_mock_call_params(mock_call) -> dict:
+    """Extract the ``params`` keyword argument from a mock call."""
+    return mock_call.kwargs.get("params") or mock_call.args[1]
+
+
 # We need to import the private functions. They live in mcp.py which also
 # instantiates a FastMCP server at module-level.  That's fine for tests.
 from offline_search.mcp import (
@@ -49,6 +54,20 @@ class TestGoogleSearchLocal:
             out = await _google_search_local("python")
         assert "Python Docs" in out
         assert "Snippet" in out
+
+    async def test_allowed_zims_passed_to_search(self):
+        """allowed_zims is forwarded to the underlying search function."""
+        r = _result()
+        with patch("offline_search.mcp.search", new=AsyncMock(return_value=[r])) as mock_search:
+            await _google_search_local("python", allowed_zims=["python_docs"])
+        mock_search.assert_called_once_with("python", allowed_zims=["python_docs"], blocked_zims=None)
+
+    async def test_blocked_zims_passed_to_search(self):
+        """blocked_zims is forwarded to the underlying search function."""
+        r = _result()
+        with patch("offline_search.mcp.search", new=AsyncMock(return_value=[r])) as mock_search:
+            await _google_search_local("python", blocked_zims=["stackoverflow"])
+        mock_search.assert_called_once_with("python", allowed_zims=None, blocked_zims=["stackoverflow"])
 
     async def test_fallback_to_kiwix_html(self):
         html_hits = [{"title": "HTML Hit", "url": "http://k/page", "snippet": "s"}]
@@ -94,6 +113,35 @@ class TestVisitPageLocal:
         with patch("offline_search.mcp.fetch_page", new=AsyncMock(side_effect=httpx.ConnectError("down"))):
             out = await _visit_page_local("http://k/page")
         assert "Error" in out
+
+    async def test_prompt_triggers_filtering(self):
+        """When a prompt is provided, filter_content_by_prompt is called."""
+        content = "# Title\n\nIntro text.\n\n## Relevant\n\nGather runs tasks.\n\n## Other\n\nUnrelated stuff."
+        with (
+            patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=content)),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered") as mock_filter,
+        ):
+            out = await _visit_page_local("http://k/page", prompt="gather tasks")
+        mock_filter.assert_called_once()
+        assert out == "filtered"
+
+    async def test_max_content_tokens_without_prompt_trims_content(self):
+        """max_content_tokens alone (no prompt) truncates by character count."""
+        long_content = "x" * 1000
+        with patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=long_content)):
+            out = await _visit_page_local("http://k/page", max_content_tokens=10)
+        assert len(out) <= 40  # 10 tokens * 4 chars/token
+
+    async def test_max_content_tokens_with_prompt(self):
+        """max_content_tokens is forwarded to filter_content_by_prompt as max_chars."""
+        content = "# Title\n\nIntro.\n\n## Section\n\nGather coroutines.\n"
+        with (
+            patch("offline_search.mcp.fetch_page", new=AsyncMock(return_value=content)),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="ok") as mock_filter,
+        ):
+            await _visit_page_local("http://k/page", prompt="gather", max_content_tokens=100)
+        _, kwargs = mock_filter.call_args
+        assert kwargs.get("max_chars") == 400  # 100 tokens * 4
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +225,40 @@ class TestGoogleSearchRemote:
 
         assert "Error" in out
 
+    async def test_allowed_zims_sent_as_params(self):
+        """allowed_zims is included in the HTTP request params."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            await _google_search_remote("python", allowed_zims=["python_docs"])
+
+        sent_params = _get_mock_call_params(mock_client.get.call_args)
+        assert "allowed_zims" in sent_params
+
+    async def test_blocked_zims_sent_as_params(self):
+        """blocked_zims is included in the HTTP request params."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = []
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            await _google_search_remote("python", blocked_zims=["stackoverflow"])
+
+        sent_params = _get_mock_call_params(mock_client.get.call_args)
+        assert "blocked_zims" in sent_params
+
 
 # ---------------------------------------------------------------------------
 # _visit_page_remote
@@ -245,6 +327,69 @@ class TestVisitPageRemote:
 
         assert "Error" in out
 
+    async def test_prompt_triggers_filtering(self):
+        """When a prompt is given, filter_content_by_prompt is applied to the content."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/plain"}
+        mock_resp.text = "# Title\n\nIntro.\n\n## Section\n\nGather tasks."
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client),
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered") as mock_filter,
+        ):
+            out = await _visit_page_remote("http://remote/page", prompt="gather tasks")
+
+        mock_filter.assert_called_once()
+        assert out == "filtered"
+
+    async def test_max_content_tokens_respected(self):
+        """max_content_tokens * 4 is used as the character cap."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/plain"}
+        mock_resp.text = "x" * 10_000
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
+            out = await _visit_page_remote("http://remote/page", max_content_tokens=100)
+
+        assert len(out) <= 400  # 100 tokens * 4 chars
+
+    async def test_prompt_with_small_tokens_uses_full_initial_cap(self):
+        """When prompt is given, html_to_markdown should receive the full 15k cap
+        so the filter can score all sections, not just a pre-truncated slice."""
+        mock_resp = MagicMock()
+        mock_resp.headers = {"content-type": "text/html"}
+        mock_resp.text = "<html><body><h1>Title</h1><p>Body</p></body></html>"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client),
+            patch("offline_search.mcp.html_to_markdown", return_value="converted") as mock_md,
+            patch("offline_search.mcp.filter_content_by_prompt", return_value="filtered"),
+        ):
+            await _visit_page_remote("http://remote/page", prompt="title", max_content_tokens=10)
+
+        # The initial markdown conversion must use 15_000 (full budget), not 40 (10 * 4),
+        # so the filter receives the complete content to work from.
+        _, kwargs = mock_md.call_args
+        assert kwargs.get("cap") == 15_000
+
 
 # ---------------------------------------------------------------------------
 # Mode dispatch (google_search / visit_page)
@@ -275,6 +420,15 @@ class TestModeDispatch:
             result = await visit_page("http://u")
         assert result == "local"
 
+    async def test_visit_page_forwards_prompt_and_tokens_local(self):
+        """prompt and max_content_tokens are forwarded to the local impl."""
+        with (
+            patch("offline_search.mcp.settings", MagicMock(is_remote=False)),
+            patch("offline_search.mcp._visit_page_local", new=AsyncMock(return_value="local")) as m,
+        ):
+            await visit_page("http://u", prompt="gather", max_content_tokens=200)
+        m.assert_called_once_with("http://u", prompt="gather", max_content_tokens=200)
+
     async def test_visit_page_dispatches_remote(self):
         with (
             patch("offline_search.mcp.settings", MagicMock(is_remote=True)),
@@ -282,6 +436,15 @@ class TestModeDispatch:
         ):
             result = await visit_page("http://u")
         assert result == "remote"
+
+    async def test_visit_page_forwards_prompt_and_tokens_remote(self):
+        """prompt and max_content_tokens are forwarded to the remote impl."""
+        with (
+            patch("offline_search.mcp.settings", MagicMock(is_remote=True)),
+            patch("offline_search.mcp._visit_page_remote", new=AsyncMock(return_value="remote")) as m,
+        ):
+            await visit_page("http://u", prompt="gather", max_content_tokens=200)
+        m.assert_called_once_with("http://u", prompt="gather", max_content_tokens=200)
 
 
 # ---------------------------------------------------------------------------

@@ -74,6 +74,32 @@ class TestSearchEndpoint:
         for r in resp.json():
             assert r["zim_name"] == "devdocs"
 
+    def test_allowed_zims_filter(self, client):
+        """allowed_zims restricts results to the listed ZIM archives."""
+        resp = client.get("/search", params={"q": "python", "allowed_zims": "python_docs"})
+        assert resp.status_code == 200
+        for r in resp.json():
+            assert r["zim_name"] == "python_docs"
+
+    def test_blocked_zims_filter(self, client):
+        """blocked_zims excludes the listed ZIM archives from results."""
+        resp = client.get("/search", params={"q": "python", "blocked_zims": "python_docs"})
+        assert resp.status_code == 200
+        for r in resp.json():
+            assert r["zim_name"] != "python_docs"
+
+    def test_allowed_and_blocked_zims_combined(self, client):
+        """allowed_zims and blocked_zims can be combined."""
+        resp = client.get("/search", params=[
+            ("q", "python"),
+            ("allowed_zims", "python_docs"),
+            ("allowed_zims", "devdocs"),
+            ("blocked_zims", "devdocs"),
+        ])
+        assert resp.status_code == 200
+        for r in resp.json():
+            assert r["zim_name"] == "python_docs"
+
     def test_no_results(self, client):
         resp = client.get("/search", params={"q": "xyzzy_nonexistent_42"})
         assert resp.status_code == 200
