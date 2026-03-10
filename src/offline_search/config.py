@@ -46,7 +46,6 @@ def _detect_kiwix_exe() -> str:
     local = base / "kiwix-tools" / bin_name
     if local.exists():
         return str(local)
-    
     sibling = base.parent / "kiwix-tools" / bin_name
     if sibling.exists():
         return str(sibling)
