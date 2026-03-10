@@ -46,6 +46,8 @@ if [ -n "${KIWIX_MANAGE:-}" ]; then
     fi
 elif [ -x "$REPO_ROOT/kiwix-tools/kiwix-manage" ]; then
     KIWIX_MANAGE="$REPO_ROOT/kiwix-tools/kiwix-manage"
+elif [ -x "$REPO_ROOT/../kiwix-tools/kiwix-manage" ]; then
+    KIWIX_MANAGE="$REPO_ROOT/../kiwix-tools/kiwix-manage"
 elif command -v kiwix-manage &>/dev/null; then
     KIWIX_MANAGE="kiwix-manage"
 else

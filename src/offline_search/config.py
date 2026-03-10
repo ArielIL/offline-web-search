@@ -41,11 +41,15 @@ def _detect_kiwix_exe() -> str:
     is_windows = platform.system() == "Windows"
     bin_name = "kiwix-serve.exe" if is_windows else "kiwix-serve"
 
-    # 1. Bundled kiwix-tools next to the project
+    # 1. Bundled kiwix-tools in or next to the project
     base = _detect_base_dir()
     local = base / "kiwix-tools" / bin_name
     if local.exists():
         return str(local)
+    
+    sibling = base.parent / "kiwix-tools" / bin_name
+    if sibling.exists():
+        return str(sibling)
 
     # 2. System PATH
     found = shutil.which("kiwix-serve")
