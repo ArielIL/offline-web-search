@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import sys
+from unittest.mock import patch
 
-from offline_search.config import Settings
+from offline_search.config import Settings, _detect_kiwix_exe
 
 
 class TestSettings:
@@ -60,3 +61,78 @@ class TestSettings:
     def test_search_api_url(self):
         s = Settings(remote_host="10.0.0.5", remote_search_port=5000)
         assert s.search_api_url == "http://10.0.0.5:5000"
+
+
+class TestDetectKiwixExe:
+    """Tests for kiwix-serve binary auto-detection."""
+
+    def test_detects_kiwix_inside_repo(self, tmp_path):
+        """kiwix-serve inside the project root takes priority."""
+        kiwix_tools = tmp_path / "kiwix-tools"
+        kiwix_tools.mkdir()
+        bin_name = "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve"
+        kiwix_bin = kiwix_tools / bin_name
+        kiwix_bin.touch()
+
+        with patch("offline_search.config._detect_base_dir", return_value=tmp_path):
+            result = _detect_kiwix_exe()
+
+        assert result == str(kiwix_bin)
+
+    def test_detects_kiwix_next_to_repo(self, tmp_path):
+        """kiwix-serve next to the project (sibling directory) is detected as fallback."""
+        repo_dir = tmp_path / "offline-web-search"
+        repo_dir.mkdir()
+        sibling_tools = tmp_path / "kiwix-tools"
+        sibling_tools.mkdir()
+        bin_name = "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve"
+        kiwix_bin = sibling_tools / bin_name
+        kiwix_bin.touch()
+
+        with patch("offline_search.config._detect_base_dir", return_value=repo_dir):
+            result = _detect_kiwix_exe()
+
+        assert result == str(kiwix_bin)
+
+    def test_inside_repo_takes_priority_over_sibling(self, tmp_path):
+        """When kiwix-serve exists both inside and next to repo, inside wins."""
+        repo_dir = tmp_path / "offline-web-search"
+        repo_dir.mkdir()
+        bin_name = "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve"
+
+        inner_tools = repo_dir / "kiwix-tools"
+        inner_tools.mkdir()
+        inner_bin = inner_tools / bin_name
+        inner_bin.touch()
+
+        sibling_tools = tmp_path / "kiwix-tools"
+        sibling_tools.mkdir()
+        (sibling_tools / bin_name).touch()
+
+        with patch("offline_search.config._detect_base_dir", return_value=repo_dir):
+            result = _detect_kiwix_exe()
+
+        assert result == str(inner_bin)
+
+    def test_falls_back_to_path(self, tmp_path):
+        """Falls back to PATH when kiwix-serve is not found in either local location."""
+        repo_dir = tmp_path / "offline-web-search"
+        repo_dir.mkdir()
+
+        with patch("offline_search.config._detect_base_dir", return_value=repo_dir), \
+             patch("offline_search.config.shutil.which", return_value="/usr/bin/kiwix-serve"):
+            result = _detect_kiwix_exe()
+
+        assert result == "/usr/bin/kiwix-serve"
+
+    def test_fallback_binary_name_when_not_found(self, tmp_path):
+        """Returns bare binary name as last resort when not found anywhere."""
+        repo_dir = tmp_path / "offline-web-search"
+        repo_dir.mkdir()
+
+        with patch("offline_search.config._detect_base_dir", return_value=repo_dir), \
+             patch("offline_search.config.shutil.which", return_value=None):
+            result = _detect_kiwix_exe()
+
+        bin_name = "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve"
+        assert result == bin_name

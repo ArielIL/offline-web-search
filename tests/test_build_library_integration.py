@@ -37,16 +37,22 @@ PWSH = shutil.which("pwsh")
 
 # Detect kiwix-manage (same logic as the scripts themselves).
 _local_kiwix = REPO_ROOT / "kiwix-tools" / "kiwix-manage"
+_sibling_kiwix = REPO_ROOT.parent / "kiwix-tools" / "kiwix-manage"
 KIWIX_MANAGE = (
     str(_local_kiwix)
     if _local_kiwix.exists()
+    else str(_sibling_kiwix)
+    if _sibling_kiwix.exists()
     else shutil.which("kiwix-manage")
 )
 
 _local_serve = REPO_ROOT / "kiwix-tools" / "kiwix-serve"
+_sibling_serve = REPO_ROOT.parent / "kiwix-tools" / "kiwix-serve"
 KIWIX_SERVE = (
     str(_local_serve)
     if _local_serve.exists()
+    else str(_sibling_serve)
+    if _sibling_serve.exists()
     else shutil.which("kiwix-serve")
 )
 

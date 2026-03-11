@@ -32,28 +32,33 @@ if (-not (Test-Path $ZimDir -PathType Container)) {
 }
 
 # Locate kiwix-manage.
-# Priority: $env:KIWIX_MANAGE → <repo>/kiwix-tools/ → PATH.
+# Priority: $env:KIWIX_MANAGE → <repo>/kiwix-tools/ → <next to repo>/kiwix-tools/ → PATH.
+function Find-KiwixManage ([string]$Dir) {
+    $bin = Join-Path $Dir "kiwix-tools/kiwix-manage.exe"
+    if (Test-Path $bin) { return $bin }
+    $bin = Join-Path $Dir "kiwix-tools/kiwix-manage"
+    if (Test-Path $bin) { return $bin }
+    return $null
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $kiwixManage = $null
+
 if ($env:KIWIX_MANAGE) {
     if (-not (Test-Path $env:KIWIX_MANAGE)) {
         Write-Error "kiwix-manage not found. Add it to PATH or place kiwix-tools\ next to this repo."
         exit 1
     }
     $kiwixManage = $env:KIWIX_MANAGE
+} elseif ($null -ne (Find-KiwixManage $repoRoot)) {
+    $kiwixManage = Find-KiwixManage $repoRoot
+} elseif ($null -ne (Find-KiwixManage (Split-Path -Parent $repoRoot))) {
+    $kiwixManage = Find-KiwixManage (Split-Path -Parent $repoRoot)
+} elseif (Get-Command "kiwix-manage" -ErrorAction SilentlyContinue) {
+    $kiwixManage = "kiwix-manage"
 } else {
-    $repoRoot = Split-Path -Parent $PSScriptRoot
-    $localBin = Join-Path $repoRoot "kiwix-tools/kiwix-manage"
-    if (-not (Test-Path $localBin)) {
-        $localBin = Join-Path $repoRoot "kiwix-tools/kiwix-manage.exe"
-    }
-    if (Test-Path $localBin) {
-        $kiwixManage = $localBin
-    } elseif (Get-Command "kiwix-manage" -ErrorAction SilentlyContinue) {
-        $kiwixManage = "kiwix-manage"
-    } else {
-        Write-Error "kiwix-manage not found. Add it to PATH or place kiwix-tools\ next to this repo."
-        exit 1
-    }
+    Write-Error "kiwix-manage not found. Add it to PATH or place kiwix-tools\ next to this repo."
+    exit 1
 }
 
 $zims = Get-ChildItem -Path $ZimDir -Filter "*.zim" | Sort-Object Name
