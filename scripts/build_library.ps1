@@ -32,7 +32,7 @@ if (-not (Test-Path $ZimDir -PathType Container)) {
 }
 
 # Locate kiwix-manage.
-# Priority: $env:KIWIX_MANAGE → <repo>/kiwix-tools/ → PATH.
+# Priority: $env:KIWIX_MANAGE → <repo>/kiwix-tools/ → ..\kiwix-tools\ → PATH.
 $kiwixManage = $null
 if ($env:KIWIX_MANAGE) {
     if (-not (Test-Path $env:KIWIX_MANAGE)) {
