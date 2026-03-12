@@ -24,8 +24,9 @@ def main() -> None:
 
     try:
         from offline_search.config import settings
+        from offline_search.formatter import format_search_result
         from offline_search.kiwix import search_kiwix_html, start_kiwix_server
-        from offline_search.search_engine import search
+        from offline_search.search_engine import SearchResult, search
     except ImportError:
         print(
             "ERROR: 'offline_search' package not installed.\n"
@@ -36,23 +37,22 @@ def main() -> None:
     async def _run() -> None:
         # Primary: FTS5 index search
         results = await search(query)
-        if results:
-            for r in results:
-                print(r.format_for_llm(settings.kiwix_url))
-            return
 
-        # Fallback: scrape Kiwix's built-in HTML search
-        start_kiwix_server()
-        html_hits = await search_kiwix_html(query)
-        if html_hits:
-            for h in html_hits[:10]:
-                print(f"Title: {h['title']}")
-                print(f"URL: {h['url']}")
-                print(f"Snippet: {h.get('snippet', 'No preview available.')}")
-                print()
-            return
+        if not results:
+            # Fallback: scrape Kiwix's built-in HTML search
+            start_kiwix_server()
+            html_hits = await search_kiwix_html(query)
+            if html_hits:
+                results = [
+                    SearchResult(
+                        title=h["title"], url=h["url"],
+                        snippet=h.get("snippet", ""),
+                        zim_name="kiwix", namespace="A",
+                    )
+                    for h in html_hits[:10]
+                ]
 
-        print("No results found. Try broader or different keywords.")
+        print(format_search_result(query, results or [], settings.kiwix_url))
 
     asyncio.run(_run())
 

@@ -42,11 +42,24 @@ python "${CLAUDE_SKILL_DIR}/scripts/fetch_page.py" "<url>"
 - Returns: clean Markdown text of the full page (capped at 15,000 chars)
 - Starts kiwix-serve automatically if not already running
 
+## CRITICAL REQUIREMENT — Sources
+
+After using search results to answer the user's question, you **MUST** include a
+`Sources:` section at the end of your response with markdown hyperlinks:
+
+```
+Sources:
+- [Page Title](URL)
+- [Another Page](URL)
+```
+
+This is **MANDATORY** — never skip including sources in your response.
+
 ## Workflow
 
 1. **Search first** — run `search.py` with your query
 2. **Read what's relevant** — run `fetch_page.py` on promising URLs
-3. **Cite your source** — mention the page title when using information
+3. **Cite your sources** — list all used sources as `[Title](URL)` under a `Sources:` section
 
 ## When to use this
 

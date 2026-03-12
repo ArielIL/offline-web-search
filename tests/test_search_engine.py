@@ -6,7 +6,9 @@ import pytest
 
 from offline_search.search_engine import (
     SearchResult,
+    _build_fts5_or_query,
     _build_fts5_query,
+    _execute_fts5,
     _expand_synonyms,
     _tokenize_query,
     search_sync,
@@ -78,6 +80,57 @@ class TestBuildFTS5Query:
         assert '""' in result  # double-quotes should be escaped
 
 
+# ── FTS5 OR query building ────────────────────────────────────────
+
+class TestBuildFTS5OrQuery:
+    def test_single_term(self):
+        assert _build_fts5_or_query(["python"]) == '"python"*'
+
+    def test_multiple_terms_joined_with_or(self):
+        result = _build_fts5_or_query(["python", "asyncio"])
+        assert '"python" OR "asyncio"*' == result
+
+    def test_no_prefix_option(self):
+        result = _build_fts5_or_query(["python", "asyncio"], use_prefix=False)
+        assert '"python" OR "asyncio"' == result
+
+    def test_empty_terms(self):
+        assert _build_fts5_or_query([]) == ""
+
+    def test_three_terms(self):
+        result = _build_fts5_or_query(["a", "bb", "cc"])
+        assert result == '"a" OR "bb" OR "cc"*'
+
+
+# ── _execute_fts5 helper ─────────────────────────────────────────
+
+class TestExecuteFTS5:
+    def test_basic_query(self, tmp_db):
+        import sqlite3
+        conn = sqlite3.connect(tmp_db)
+        conn.row_factory = sqlite3.Row
+        rows = _execute_fts5(conn, '"python"*', None, 10)
+        conn.close()
+        assert len(rows) > 0
+
+    def test_with_zim_filter(self, tmp_db):
+        import sqlite3
+        conn = sqlite3.connect(tmp_db)
+        conn.row_factory = sqlite3.Row
+        rows = _execute_fts5(conn, '"python"*', "devdocs", 10)
+        conn.close()
+        # devdocs doesn't have "python" in test data title (only "JavaScript Guide")
+        assert all(row["zim_name"] == "devdocs" for row in rows)
+
+    def test_invalid_query_returns_empty(self, tmp_db):
+        import sqlite3
+        conn = sqlite3.connect(tmp_db)
+        conn.row_factory = sqlite3.Row
+        rows = _execute_fts5(conn, "", None, 10)
+        conn.close()
+        assert rows == []
+
+
 # ── Search execution against test DB ───────────────────────────────
 
 class TestSearchSync:
@@ -129,6 +182,15 @@ class TestSearchSync:
         from offline_search.search_engine import _expand_synonyms
         expanded = _expand_synonyms(["js"])
         assert "javascript" in expanded
+
+    def test_or_fallback_partial_match(self, tmp_db):
+        """Multi-term query where not all terms exist should still return
+        results via OR fallback instead of nothing."""
+        # "python" exists but "xyzzynonexistent" does not — AND will fail,
+        # OR should find python docs
+        results = search_sync("python xyzzynonexistent", db_path=tmp_db)
+        assert len(results) > 0
+        assert any("python" in r.title.lower() for r in results)
 
     def test_missing_db_returns_empty(self, tmp_path):
         results = search_sync("python", db_path=tmp_path / "nonexistent.db")

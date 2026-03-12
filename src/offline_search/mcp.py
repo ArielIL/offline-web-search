@@ -20,14 +20,14 @@ Or via the entry-point::
 from __future__ import annotations
 
 import logging
-import urllib.parse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import settings
+from .formatter import format_search_result
 from .kiwix import fetch_page, html_to_markdown, search_kiwix_html, start_kiwix_server
-from .search_engine import search
+from .search_engine import SearchResult, search
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +39,30 @@ mcp = FastMCP("offline-search")
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def google_search(query: str) -> str:
-    """Performs a full-text search across the offline documentation library.
+async def google_search(query: str, zim_filter: str | None = None) -> str:
+    """Search offline documentation and use the results to inform responses.
 
-    Use this tool whenever you need to look up documentation, API references,
-    or technical guides regarding Python, programming, or any other topic
-    present in the local library.
+    Searches indexed ZIM archives (Python docs, Stack Overflow, DevDocs, etc.)
+    and returns search results with links and snippets.
 
-    This tool is your **primary source of external information** since you do
-    not have internet access.
+    Use this tool for looking up API references, programming guides, technical
+    documentation, or any external knowledge.
+
+    CRITICAL REQUIREMENT - You MUST follow this:
+      - After answering the user's question, you MUST include a "Sources:"
+        section at the end of your response
+      - In the Sources section, list relevant URLs from the search results
+        as markdown hyperlinks: [Title](URL)
+      - This is MANDATORY - never skip including sources in your response
 
     Args:
-        query: Search keywords — be specific (e.g. 'python asyncio gather',
-               'sqlite fts5 syntax', 'react useEffect cleanup').
+        query: Search keywords — be specific but concise
+               (e.g. 'python asyncio gather', 'sqlite fts5 syntax').
+        zim_filter: Optional — restrict results to a specific ZIM library name.
     """
     if settings.is_remote:
-        return await _google_search_remote(query)
-    return await _google_search_local(query)
+        return await _google_search_remote(query, zim_filter=zim_filter)
+    return await _google_search_local(query, zim_filter=zim_filter)
 
 
 @mcp.tool()
@@ -77,27 +84,25 @@ async def visit_page(url: str) -> str:
 # Local-mode implementations
 # ---------------------------------------------------------------------------
 
-async def _google_search_local(query: str) -> str:
+async def _google_search_local(query: str, *, zim_filter: str | None = None) -> str:
     try:
-        results = await search(query)
+        results = await search(query, zim_filter=zim_filter)
 
-        if results:
-            lines = [r.format_for_llm(settings.kiwix_url) for r in results]
-            return "\n".join(lines)
+        if not results:
+            # Fallback: scrape Kiwix HTML search (ensure kiwix is running)
+            start_kiwix_server()
+            html_hits = await search_kiwix_html(query)
+            if html_hits:
+                results = [
+                    SearchResult(
+                        title=h["title"], url=h["url"],
+                        snippet=h.get("snippet", ""),
+                        zim_name="kiwix", namespace="A",
+                    )
+                    for h in html_hits[:10]
+                ]
 
-        # Fallback: scrape Kiwix HTML search (ensure kiwix is running)
-        start_kiwix_server()
-        html_hits = await search_kiwix_html(query)
-        if html_hits:
-            lines = [
-                f"Title: {h['title']}\nURL: {h['url']}\n"
-                f"Snippet: {h.get('snippet', 'No preview available.')}\n"
-                for h in html_hits[:10]
-            ]
-            return "\n".join(lines)
-
-        return "No results found. Try broader or different keywords."
-
+        return format_search_result(query, results or [], settings.kiwix_url)
     except Exception as e:
         logger.exception("google_search (local) failed")
         return f"Error executing offline search: {e}"
@@ -118,36 +123,31 @@ async def _visit_page_local(url: str) -> str:
 # Remote-mode implementations
 # ---------------------------------------------------------------------------
 
-async def _google_search_remote(query: str) -> str:
+async def _google_search_remote(query: str, *, zim_filter: str | None = None) -> str:
     try:
+        params: dict = {"q": query, "limit": settings.search_default_limit}
+        if zim_filter:
+            params["zim_filter"] = zim_filter
+
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(
                 f"{settings.search_api_url}/search",
-                params={"q": query, "limit": settings.search_default_limit},
+                params=params,
             )
 
+            results: list[SearchResult] = []
             if resp.status_code == 200:
-                results = resp.json()
-                if results:
-                    lines = []
-                    for r in results:
-                        zim = r.get("zim_name", "")
-                        ns = r.get("namespace", "A")
-                        partial_url = r.get("url", "")
+                for r in resp.json():
+                    results.append(SearchResult(
+                        title=r.get("title", ""),
+                        url=r.get("url", ""),
+                        snippet=r.get("snippet", ""),
+                        zim_name=r.get("zim_name", ""),
+                        namespace=r.get("namespace", "A"),
+                        score=r.get("score", 0.0),
+                    ))
 
-                        if partial_url.startswith(("http://", "https://")):
-                            full_link = partial_url
-                        else:
-                            encoded = urllib.parse.quote(partial_url, safe="/:?=&%._-#")
-                            full_link = f"{settings.kiwix_url}/content/{zim}/{ns}/{encoded}"
-
-                        snippet = r.get("snippet", "No preview available.")
-                        lines.append(
-                            f"Title: {r['title']}\nURL: {full_link}\nSnippet: {snippet}\n"
-                        )
-                    return "\n".join(lines)
-
-        return "No results found."
+        return format_search_result(query, results, settings.kiwix_url)
 
     except Exception as e:
         logger.exception("google_search (remote) failed")

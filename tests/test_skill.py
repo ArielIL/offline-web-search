@@ -84,6 +84,9 @@ class TestSearchMain:
     def _make_result(title: str = "Python asyncio", snippet: str = "coroutines"):
         """Return a mock that behaves like ``SearchResult``."""
         r = MagicMock()
+        r.title = title
+        r.snippet = snippet
+        r.format_full_url.return_value = "http://localhost:8081/content/x"
         r.format_for_llm.return_value = (
             f"Title: {title}\nURL: http://localhost:8081/content/x\nSnippet: {snippet}\n"
         )
@@ -98,12 +101,20 @@ class TestSearchMain:
         mock_search = AsyncMock(return_value=[self._make_result()])
         mock_settings = MagicMock(kiwix_url="http://127.0.0.1:8081")
 
+        mock_format = MagicMock(return_value=(
+            'Offline search results for query: "python asyncio"\n\n'
+            'Links: [{"title": "Python asyncio", "url": "http://localhost:8081/content/x"}]\n\n'
+            '**Python asyncio**\nhttp://localhost:8081/content/x\ncoroutines\n\n'
+            'REMINDER: You MUST include the sources above'
+        ))
+
         with (
             patch.dict(sys.modules, {
                 "offline_search": MagicMock(),
                 "offline_search.config": MagicMock(settings=mock_settings),
+                "offline_search.formatter": MagicMock(format_search_result=mock_format),
                 "offline_search.kiwix": MagicMock(),
-                "offline_search.search_engine": MagicMock(search=mock_search),
+                "offline_search.search_engine": MagicMock(search=mock_search, SearchResult=MagicMock),
             }),
         ):
             # Re-import so the patched modules take effect inside main()
@@ -111,7 +122,9 @@ class TestSearchMain:
             mod.main()
 
         out = capsys.readouterr().out
-        assert "Title: Python asyncio" in out
+        assert 'Offline search results for query:' in out
+        assert "Links: [" in out
+        assert "REMINDER:" in out
         mock_search.assert_awaited_once()
 
     def test_fallback_to_kiwix_html(self, capsys, monkeypatch):
@@ -125,15 +138,17 @@ class TestSearchMain:
         mock_html = AsyncMock(return_value=html_hits)
         mock_start = MagicMock()
         mock_settings = MagicMock(kiwix_url="http://127.0.0.1:8081")
+        mock_format = MagicMock(return_value="Offline search results for query: \"react\"\n\nLinks: []\n\n**React Hooks**\nhttp://localhost/react\nhooks\n\nREMINDER:")
 
         with patch.dict(sys.modules, {
             "offline_search": MagicMock(),
             "offline_search.config": MagicMock(settings=mock_settings),
+            "offline_search.formatter": MagicMock(format_search_result=mock_format),
             "offline_search.kiwix": MagicMock(
                 search_kiwix_html=mock_html,
                 start_kiwix_server=mock_start,
             ),
-            "offline_search.search_engine": MagicMock(search=mock_search),
+            "offline_search.search_engine": MagicMock(search=mock_search, SearchResult=MagicMock),
         }):
             mod = _import_script(SEARCH_SCRIPT, "skill_search_fb")
             mod.main()
@@ -151,21 +166,24 @@ class TestSearchMain:
         mock_html = AsyncMock(return_value=[])
         mock_start = MagicMock()
         mock_settings = MagicMock(kiwix_url="http://127.0.0.1:8081")
+        mock_format = MagicMock(return_value='Offline search results for query: "xyzzy_nonexistent"\n\nNo results found.\n\nSuggestions:\n- Try shorter or broader keywords')
 
         with patch.dict(sys.modules, {
             "offline_search": MagicMock(),
             "offline_search.config": MagicMock(settings=mock_settings),
+            "offline_search.formatter": MagicMock(format_search_result=mock_format),
             "offline_search.kiwix": MagicMock(
                 search_kiwix_html=mock_html,
                 start_kiwix_server=mock_start,
             ),
-            "offline_search.search_engine": MagicMock(search=mock_search),
+            "offline_search.search_engine": MagicMock(search=mock_search, SearchResult=MagicMock),
         }):
             mod = _import_script(SEARCH_SCRIPT, "skill_search_none")
             mod.main()
 
         out = capsys.readouterr().out
         assert "No results found" in out
+        assert "Suggestions:" in out
 
     def test_multiple_args_joined(self, monkeypatch):
         """Multiple CLI args are joined into a single query string."""
@@ -178,15 +196,17 @@ class TestSearchMain:
             return []
 
         mock_settings = MagicMock(kiwix_url="http://127.0.0.1:8081")
+        mock_format = MagicMock(return_value="formatted output")
 
         with patch.dict(sys.modules, {
             "offline_search": MagicMock(),
             "offline_search.config": MagicMock(settings=mock_settings),
+            "offline_search.formatter": MagicMock(format_search_result=mock_format),
             "offline_search.kiwix": MagicMock(
                 search_kiwix_html=AsyncMock(return_value=[]),
                 start_kiwix_server=MagicMock(),
             ),
-            "offline_search.search_engine": MagicMock(search=_capture),
+            "offline_search.search_engine": MagicMock(search=_capture, SearchResult=MagicMock),
         }):
             mod = _import_script(SEARCH_SCRIPT, "skill_search_join")
             mod.main()
@@ -337,3 +357,9 @@ class TestSkillStructure:
         assert "search.py" in text
         assert "fetch_page.py" in text
         assert "CLAUDE_SKILL_DIR" in text
+
+    def test_skill_md_has_critical_requirement(self):
+        """SKILL.md should contain the CRITICAL REQUIREMENT for sources."""
+        text = (self.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        assert "CRITICAL REQUIREMENT" in text
+        assert "Sources:" in text

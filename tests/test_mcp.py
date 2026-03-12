@@ -47,8 +47,10 @@ class TestGoogleSearchLocal:
         settings.db_path = tmp_db
         try:
             out = await _google_search_local("python")
-            assert "Python Tutorial" in out
-            assert "Learn **Python**" in out
+            assert 'Offline search results for query: "python"' in out
+            assert "Links: [" in out
+            assert "**Python Tutorial**" in out
+            assert "REMINDER:" in out
         finally:
             settings.db_path = original_db
 
@@ -60,7 +62,9 @@ class TestGoogleSearchLocal:
             patch("offline_search.mcp.start_kiwix_server"),
         ):
             out = await _google_search_local("react")
-        assert "HTML Hit" in out
+        assert "**HTML Hit**" in out
+        assert "Links: [" in out
+        assert "REMINDER:" in out
 
     async def test_no_results(self, tmp_db):
         from offline_search.config import settings
@@ -73,8 +77,19 @@ class TestGoogleSearchLocal:
             ):
                 out = await _google_search_local("xyzzy")
             assert "No results found" in out
+            assert "Suggestions:" in out
         finally:
             settings.db_path = original_db
+
+    async def test_zim_filter_passthrough(self):
+        mock_search = AsyncMock(return_value=[])
+        with (
+            patch("offline_search.mcp.search", mock_search),
+            patch("offline_search.mcp.search_kiwix_html", new=AsyncMock(return_value=[])),
+            patch("offline_search.mcp.start_kiwix_server"),
+        ):
+            await _google_search_local("python", zim_filter="devdocs")
+        mock_search.assert_awaited_once_with("python", zim_filter="devdocs")
 
     async def test_exception_handled(self):
         with patch("offline_search.mcp.search", new=AsyncMock(side_effect=RuntimeError("boom"))):
@@ -130,8 +145,11 @@ class TestGoogleSearchRemote:
         with patch("offline_search.mcp.httpx.AsyncClient", return_value=mock_client):
             out = await _google_search_remote("api")
 
-        assert "Remote Doc" in out
+        assert 'Offline search results for query: "api"' in out
+        assert "Links: [" in out
+        assert "**Remote Doc**" in out
         assert "API reference" in out
+        assert "REMINDER:" in out
 
     async def test_external_url_preserved(self):
         """If the result URL is already absolute, don't prefix it."""
@@ -172,6 +190,7 @@ class TestGoogleSearchRemote:
             out = await _google_search_remote("nothing")
 
         assert "No results found" in out
+        assert "Suggestions:" in out
 
     async def test_exception_handled(self):
         mock_client = AsyncMock()

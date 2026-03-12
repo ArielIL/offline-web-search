@@ -123,6 +123,25 @@ def _expand_synonyms(terms: list[str]) -> list[str]:
     return expanded
 
 
+def _build_fts5_or_query(terms: list[str], *, use_prefix: bool = True) -> str:
+    """Build a safe FTS5 MATCH expression using OR (any term matches).
+
+    Same quoting/prefix logic as :func:`_build_fts5_query` but joins with
+    ``OR`` instead of implicit AND, giving broader recall.
+    """
+    if not terms:
+        return ""
+    safe: list[str] = []
+    for i, term in enumerate(terms):
+        escaped = term.replace('"', '""')
+        is_last = i == len(terms) - 1
+        if is_last and use_prefix and len(term) >= 2:
+            safe.append(f'"{escaped}"*')
+        else:
+            safe.append(f'"{escaped}"')
+    return " OR ".join(safe)
+
+
 def _build_fts5_query(terms: list[str], *, use_prefix: bool = True) -> str:
     """Build a safe FTS5 MATCH expression from a list of tokens.
 
@@ -148,6 +167,32 @@ def _build_fts5_query(terms: list[str], *, use_prefix: bool = True) -> str:
 # Search execution
 # ---------------------------------------------------------------------------
 
+def _execute_fts5(
+    conn: sqlite3.Connection,
+    fts_query: str,
+    zim_filter: str | None,
+    limit: int,
+) -> list[sqlite3.Row]:
+    """Execute FTS5 MATCH query, return raw rows."""
+    sql = (
+        "SELECT title, url, zim_name, namespace, "
+        f"snippet(documents, 1, '**', '**', ' … ', {settings.snippet_tokens}) AS snippet, "
+        "bm25(documents, 10.0, 1.0, 0.0, 0.0, 0.0) AS score "
+        "FROM documents WHERE documents MATCH ?"
+    )
+    params: list = [fts_query]
+    if zim_filter:
+        sql += " AND zim_name = ?"
+        params.append(zim_filter)
+    sql += " ORDER BY score LIMIT ?"
+    params.append(limit)
+    try:
+        return conn.execute(sql, params).fetchall()
+    except sqlite3.Error:
+        logger.exception("FTS5 query failed: %r", fts_query)
+        return []
+
+
 def search_sync(
     query: str,
     *,
@@ -156,6 +201,9 @@ def search_sync(
     zim_filter: str | None = None,
 ) -> list[SearchResult]:
     """Run a full-text search against the SQLite FTS5 index (blocking).
+
+    Uses progressive query relaxation: tries AND first (all terms must match),
+    then falls back to OR (any term matches) if AND returns nothing.
 
     Parameters
     ----------
@@ -189,23 +237,13 @@ def search_sync(
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
     try:
-        sql = (
-            "SELECT title, url, zim_name, namespace, "
-            f"snippet(documents, 1, '**', '**', ' … ', {settings.snippet_tokens}) AS snippet, "
-            "bm25(documents, 10.0, 1.0, 0.0, 0.0, 0.0) AS score "
-            "FROM documents WHERE documents MATCH ?"
-        )
-        params: list = [fts_query]
+        # Strategy 1: AND (all terms must match) — best precision
+        rows = _execute_fts5(conn, fts_query, zim_filter, overfetch)
 
-        if zim_filter:
-            sql += " AND zim_name = ?"
-            params.append(zim_filter)
-
-        sql += " ORDER BY score LIMIT ?"
-        params.append(overfetch)
-
-        cursor = conn.execute(sql, params)
-        rows = cursor.fetchall()
+        # Strategy 2: OR fallback (any term matches) — broader recall
+        if not rows and len(terms) > 1:
+            fts_or_query = _build_fts5_or_query(terms)
+            rows = _execute_fts5(conn, fts_or_query, zim_filter, overfetch)
 
         candidates: list[SearchResult] = []
         for row in rows:
