@@ -38,7 +38,7 @@ if [ ${#ZIMS[@]} -eq 0 ]; then
 fi
 
 # Locate kiwix-manage.
-# Priority: $KIWIX_MANAGE env var → <repo>/kiwix-tools/ → PATH.
+# Priority: $KIWIX_MANAGE env var → <repo>/kiwix-tools/ → ../kiwix-tools/ → PATH.
 if [ -n "${KIWIX_MANAGE:-}" ]; then
     if [ ! -x "$KIWIX_MANAGE" ]; then
         echo "Error: kiwix-manage not found. Add it to PATH or place kiwix-tools/ next to this repo." >&2
