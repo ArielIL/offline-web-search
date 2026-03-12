@@ -46,8 +46,15 @@ if ($env:KIWIX_MANAGE) {
     if (-not (Test-Path $localBin)) {
         $localBin = Join-Path $repoRoot "kiwix-tools/kiwix-manage.exe"
     }
+    $siblingBin = Join-Path (Split-Path -Parent $repoRoot) "kiwix-tools/kiwix-manage"
+    if (-not (Test-Path $siblingBin)) {
+        $siblingBin = Join-Path (Split-Path -Parent $repoRoot) "kiwix-tools/kiwix-manage.exe"
+    }
+
     if (Test-Path $localBin) {
         $kiwixManage = $localBin
+    } elseif (Test-Path $siblingBin) {
+        $kiwixManage = $siblingBin
     } elseif (Get-Command "kiwix-manage" -ErrorAction SilentlyContinue) {
         $kiwixManage = "kiwix-manage"
     } else {
