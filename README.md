@@ -35,6 +35,7 @@ graph LR
 - **Distributed ready** — run the heavy ZIM server centrally, connect lightweight clients over the network
 - **Content management API** — index custom HTML pages, crawl internal sites, manage the index via REST
 - **Extensible** — inject content from Confluence, Artifactory, or any other source
+- **Token-efficient** — Haiku sub-agent summarizes results before returning them, plus an optional compact MCP output format
 
 ## Quick Start
 
@@ -127,6 +128,8 @@ Add `--limit 50` for a quick smoke-test (indexes only 50 articles per ZIM).
 
 This copies the skill to `~/.claude/skills/offline-search/`. Claude Code will auto-trigger it when it needs to search documentation, or you can invoke it directly with `/offline-search <query>`.
 
+The skill routes through a **Haiku sub-agent** (`.claude/agents/offline-search-agent.md`) that executes the search, analyzes the raw results, and returns a condensed summary to the main model — saving tokens in your context window.
+
 **Option B: MCP server**
 
 ```bash
@@ -164,8 +167,11 @@ src/offline_search/
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP API + content management endpoints
 
+.claude/agents/
+└── offline-search-agent.md  # Haiku sub-agent — summarizes search results to save tokens
+
 skills/offline-search/
-├── SKILL.md           # Claude Code skill definition
+├── SKILL.md           # Claude Code skill definition (routes through Haiku agent)
 └── scripts/
     ├── search.py      # CLI: search the index, print results
     └── fetch_page.py  # CLI: fetch a page, print Markdown
@@ -205,8 +211,27 @@ All settings support environment variable overrides (prefix: `OFFLINE_SEARCH_`):
 | `OFFLINE_SEARCH_KIWIX_PORT` | `8081` | Kiwix-serve port |
 | `OFFLINE_SEARCH_SERVER_PORT` | `8082` | HTTP API port |
 | `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for remote mode |
+| `OFFLINE_SEARCH_COMPACT_FORMAT` | `false` | Emit minimal `{title, url}` JSON + truncated snippets (reduces MCP token usage) |
 
 Or create a `.env` file at the project root.
+
+## Token Optimization
+
+Large search results can consume significant context window space. Two mechanisms help keep token usage low:
+
+### 1. Haiku Sub-Agent (Skill path)
+
+When using the `/offline-search` skill, queries are routed through `.claude/agents/offline-search-agent.md`, which runs on the lightweight **Haiku** model. Haiku executes the search and page fetches in its own context, then returns only a concise summary (titles, URLs, and brief descriptions) to the main model. This mirrors Claude Code's built-in WebFetch pattern.
+
+### 2. Compact Format (MCP path)
+
+Set `OFFLINE_SEARCH_COMPACT_FORMAT=true` to switch MCP tool output to a minimal format:
+
+```bash
+OFFLINE_SEARCH_COMPACT_FORMAT=true offline-search-mcp
+```
+
+In compact mode, `google_search` returns a JSON array of `{title, url}` objects with single-line truncated snippets instead of full rich output.
 
 ## Testing
 
