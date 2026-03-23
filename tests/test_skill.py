@@ -356,7 +356,6 @@ class TestSkillStructure:
         text = (self.SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         assert "search.py" in text
         assert "fetch_page.py" in text
-        assert "CLAUDE_SKILL_DIR" in text
 
     def test_skill_md_has_critical_requirement(self):
         """SKILL.md should contain the CRITICAL REQUIREMENT for sources."""

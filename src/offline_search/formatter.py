@@ -54,3 +54,39 @@ def format_search_result(
 
     parts = [header, links_line, *snippets, SOURCES_REMINDER]
     return "\n\n".join(parts)
+
+
+_SNIPPET_MAX_CHARS = 80
+
+
+def format_search_result_compact(
+    query: str,
+    results: list[SearchResult],
+    kiwix_base_url: str,
+) -> str:
+    """Compact format: Links JSON + truncated one-line snippets.
+
+    Mirrors WebSearch's ``LSY()`` output style — minimal tokens while
+    preserving enough context for the model to decide which pages to visit.
+    """
+    header = f'Offline search results for query: "{query}"'
+
+    if not results:
+        return f"{header}\n\n{NO_RESULTS_MESSAGE}"
+
+    links = [
+        {"title": r.title, "url": r.format_full_url(kiwix_base_url)}
+        for r in results
+    ]
+    links_line = f"Links: {json.dumps(links)}"
+
+    # One-line truncated snippets
+    snippet_lines: list[str] = []
+    for r in results:
+        snippet = (r.snippet or "").replace("\n", " ").strip()
+        if len(snippet) > _SNIPPET_MAX_CHARS:
+            snippet = snippet[:_SNIPPET_MAX_CHARS] + "…"
+        snippet_lines.append(f"- {r.title}: {snippet}" if snippet else f"- {r.title}")
+
+    parts = [header, links_line, "\n".join(snippet_lines), SOURCES_REMINDER]
+    return "\n\n".join(parts)

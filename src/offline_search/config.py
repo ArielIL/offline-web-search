@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     search_overfetch_factor: int = 5
     snippet_tokens: int = 16
 
+    # --- Output format ---
+    compact_format: bool = False
+
     def model_post_init(self, __context: object) -> None:
         # Auto-detect mode when not explicitly set
         if not self.mode:

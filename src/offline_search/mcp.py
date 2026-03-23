@@ -25,7 +25,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .config import settings
-from .formatter import format_search_result
+from .formatter import format_search_result, format_search_result_compact
 from .kiwix import fetch_page, html_to_markdown, search_kiwix_html, start_kiwix_server
 from .search_engine import SearchResult, search
 
@@ -102,7 +102,8 @@ async def _google_search_local(query: str, *, zim_filter: str | None = None) -> 
                     for h in html_hits[:10]
                 ]
 
-        return format_search_result(query, results or [], settings.kiwix_url)
+        formatter = format_search_result_compact if settings.compact_format else format_search_result
+        return formatter(query, results or [], settings.kiwix_url)
     except Exception as e:
         logger.exception("google_search (local) failed")
         return f"Error executing offline search: {e}"
@@ -147,7 +148,8 @@ async def _google_search_remote(query: str, *, zim_filter: str | None = None) ->
                         score=r.get("score", 0.0),
                     ))
 
-        return format_search_result(query, results, settings.kiwix_url)
+        formatter = format_search_result_compact if settings.compact_format else format_search_result
+        return formatter(query, results, settings.kiwix_url)
 
     except Exception as e:
         logger.exception("google_search (remote) failed")

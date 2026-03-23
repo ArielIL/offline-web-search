@@ -6,6 +6,7 @@ description: >
   look up API references, programming guides, technical documentation, or any
   external knowledge — especially when working without internet access. This is
   your primary source of external information when web search is unavailable.
+agent: offline-search-agent
 allowed-tools: Bash(python *)
 argument-hint: "[search query]"
 ---
@@ -13,34 +14,36 @@ argument-hint: "[search query]"
 # Offline Search
 
 You have access to an **offline documentation search engine** powered by Kiwix
-ZIM archives indexed into SQLite FTS5. Use it as your drop-in replacement for
-web search.
+ZIM archives indexed into SQLite FTS5. This skill routes through a Haiku
+sub-agent that searches, summarizes results, and returns only the relevant
+information — saving tokens in the main model's context window.
 
-## Available commands
+## How it works
+
+When invoked, the `offline-search-agent` (running on Haiku) will:
+
+1. Run the search query against the offline index
+2. Analyze the raw results
+3. Return a **condensed summary** with titles, URLs, and brief descriptions
+4. If you need full page content, the agent fetches and extracts only the relevant parts
+
+## Available commands (executed by the agent)
 
 ### 1. Search documentation
 
-Run this to search across all indexed docs:
-
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/search.py" "<query>"
+python "skills/offline-search/scripts/search.py" "<query>"
 ```
 
 - Be specific with queries (e.g. `python asyncio gather`, `sqlite fts5 syntax`)
-- Returns: title, URL, and snippet for each result
-- The URL in each result can be passed to the fetch script below
 
 ### 2. Read a full page
 
-After finding a relevant result, fetch its full content:
-
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/fetch_page.py" "<url>"
+python "skills/offline-search/scripts/fetch_page.py" "<url>"
 ```
 
 - Pass the exact URL from a search result
-- Returns: clean Markdown text of the full page (capped at 15,000 chars)
-- Starts kiwix-serve automatically if not already running
 
 ## CRITICAL REQUIREMENT — Sources
 
@@ -57,8 +60,8 @@ This is **MANDATORY** — never skip including sources in your response.
 
 ## Workflow
 
-1. **Search first** — run `search.py` with your query
-2. **Read what's relevant** — run `fetch_page.py` on promising URLs
+1. **Search** — the agent runs `search.py` with your query and summarizes results
+2. **Read what's relevant** — ask the agent to fetch promising URLs
 3. **Cite your sources** — list all used sources as `[Title](URL)` under a `Sources:` section
 
 ## When to use this
@@ -77,4 +80,4 @@ This is **MANDATORY** — never skip including sources in your response.
 - Results are ranked by relevance with title matches weighted 10×
 
 If invoked directly with arguments (e.g. `/offline-search python asyncio`),
-run the search script with `$ARGUMENTS` as the query.
+search for `$ARGUMENTS` as the query.
