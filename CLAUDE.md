@@ -16,6 +16,7 @@
 src/offline_search/
 ├── config.py          # Centralised settings (pydantic-settings, .env support)
 ├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
+├── formatter.py       # Result formatting (standard + compact output modes)
 ├── kiwix.py           # Kiwix-serve lifecycle + page fetching
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
@@ -91,6 +92,17 @@ Two mechanisms reduce context window usage:
 1. **Haiku sub-agent (SKILL path)**: The `/offline-search` skill routes through `.claude/agents/offline-search-agent.md`, which runs on Haiku. Raw search results and page content are processed by Haiku, and only a condensed summary is returned to the main model. This mirrors Claude Code's built-in WebFetch pattern.
 
 2. **Compact format (MCP path)**: Set `OFFLINE_SEARCH_COMPACT_FORMAT=true` to switch MCP tool output to a minimal format — `{title, url}` JSON array + truncated one-line snippets. This reduces token usage when the MCP tools are called directly.
+
+## New Feature Checklist
+
+When adding a new feature, review and update the following files as needed:
+
+1. **`README.md`** — Features list, architecture diagram, project structure, configuration table, usage examples
+2. **`CLAUDE.md`** (this file) — Architecture section, Key Commands, Configuration table, any relevant conventions or notes
+3. **`pyproject.toml`** — New dependencies, entry points (`[project.scripts]`), keywords, classifiers
+4. **`skills/offline-search/SKILL.md`** — If the feature affects the Claude Code skill interface or workflow
+5. **`.claude/agents/offline-search-agent.md`** — If the feature affects the sub-agent's capabilities or output format
+6. **`tests/`** — Add or update tests for new functionality
 
 ## Important Notes
 
