@@ -6,11 +6,8 @@ and makes real HTTP requests to the kiwix-serve process for content.
 """
 
 import socket
-import subprocess
-import time
 from pathlib import Path
 
-import httpx
 import pytest
 
 from offline_search.indexer import index_zim, prepare_database
@@ -18,10 +15,12 @@ from offline_search.kiwix import fetch_page
 from offline_search.search_engine import search_sync
 from offline_search.config import settings
 
+
 def find_free_port() -> int:
     with socket.socket() as s:
         s.bind(("", 0))
         return s.getsockname()[1]
+
 
 @pytest.fixture(scope="module")
 def e2e_environment(tmp_path_factory):
@@ -29,8 +28,9 @@ def e2e_environment(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("e2e_data")
     db_path = tmp_path / "e2e_index.sqlite"
     xml_path = tmp_path / "library.xml"
-    
-    zim_path = Path(__file__).parent / "data" / "devdocs_en_markdown_2026-01.zim"
+
+    zim_path = Path(__file__).parent / "data" / \
+        "devdocs_en_markdown_2026-01.zim"
     if not zim_path.exists():
         pytest.skip(f"Test fixture {zim_path} not found")
 
@@ -57,29 +57,30 @@ def e2e_environment(tmp_path_factory):
 
     from offline_search.kiwix import start_kiwix_server
     success = start_kiwix_server(
-        port=port, 
-        library_xml=str(xml_path), 
+        port=port,
+        library_xml=str(xml_path),
         timeout=10.0
     )
-    
+
     if not success:
         pytest.fail(f"kiwix-serve failed to start on port {port}")
 
     target_url = f"http://127.0.0.1:{port}"
 
-    # Patch config to use the temporary database and url
+    # Patch config to use the temporary database and port
+    # (kiwix_url is a computed property derived from kiwix_port)
     original_db = settings.db_path
-    original_url = settings.kiwix_url
-    
+    original_port = settings.kiwix_port
+
     settings.db_path = db_path
-    settings.kiwix_url = target_url
+    settings.kiwix_port = port
 
     yield {"db_path": db_path, "url": target_url, "port": port}
 
     # Teardown
     settings.db_path = original_db
-    settings.kiwix_url = original_url
-    
+    settings.kiwix_port = original_port
+
     # Send a kill signal to kiwix-serve process on the port
     import psutil
     for proc in psutil.process_iter(['pid', 'name', 'connections']):
@@ -91,25 +92,27 @@ def e2e_environment(tmp_path_factory):
             pass
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_end_to_end_search_and_fetch(e2e_environment):
     db_path = e2e_environment["db_path"]
     kiwix_url = e2e_environment["url"]
-    
+
     # 1. Search DB for a realistic keyword
     results = search_sync("markdown", db_path=db_path, limit=5)
-    assert len(results) > 0, "Indexer failed to retrieve any documents for 'markdown'"
-    
+    assert len(
+        results) > 0, "Indexer failed to retrieve any documents for 'markdown'"
+
     top_result = results[0]
     assert top_result.zim_name == "devdocs_en_markdown_2026-01"
-    
+
     # Generate full URL based on the same logic used in our system
     fetch_url = top_result.format_full_url(kiwix_url)
     assert "devdocs_en_markdown_2026-01" in fetch_url
-    
+
     # 2. Fetch page (actual HTTP request, NO MOCKS)
     content = await fetch_page(fetch_url)
-    
+
     # 3. Assert content was successfully processed into Markdown
     assert content
     assert len(content) > 10

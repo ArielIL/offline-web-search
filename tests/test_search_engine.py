@@ -1,137 +1,16 @@
-"""Tests for the search_engine module — query processing, ranking, and filtering."""
+"""Tests for the search_engine module — public API: search_sync, search, SearchResult.
+
+All internal query processing (tokenisation, synonym expansion, FTS5 query
+building) is exercised indirectly through the public search functions.
+"""
 
 from __future__ import annotations
 
-import pytest
 
-from offline_search.search_engine import (
-    SearchResult,
-    _build_fts5_or_query,
-    _build_fts5_query,
-    _execute_fts5,
-    _expand_synonyms,
-    _tokenize_query,
-    search_sync,
-)
+from offline_search.search_engine import SearchResult, search_sync
 
 
-# ── Query tokenisation ─────────────────────────────────────────────
-
-class TestTokenizeQuery:
-    def test_basic_terms(self):
-        assert _tokenize_query("python asyncio") == ["python", "asyncio"]
-
-    def test_stop_words_removed(self):
-        result = _tokenize_query("how to use python for data")
-        assert "how" not in result
-        assert "to" not in result
-        assert "for" not in result
-        assert "python" in result
-        assert "data" in result
-
-    def test_all_stop_words_fallback(self):
-        """When every word is a stop-word, keep them all."""
-        result = _tokenize_query("to be or not to be")
-        assert len(result) > 0
-
-    def test_empty_query(self):
-        assert _tokenize_query("") == []
-        assert _tokenize_query("   ") == []
-
-
-# ── Synonym expansion ──────────────────────────────────────────────
-
-class TestExpandSynonyms:
-    def test_js_expands(self):
-        result = _expand_synonyms(["js", "framework"])
-        assert "javascript" in result
-        assert "js" in result
-        assert "framework" in result
-
-    def test_no_expansion_for_unknown(self):
-        result = _expand_synonyms(["python"])
-        assert result == ["python"]
-
-    def test_py_expands(self):
-        result = _expand_synonyms(["py"])
-        assert "python" in result
-
-
-# ── FTS5 query building ───────────────────────────────────────────
-
-class TestBuildFTS5Query:
-    def test_single_term(self):
-        assert _build_fts5_query(["python"]) == '"python"*'
-
-    def test_multiple_terms(self):
-        result = _build_fts5_query(["python", "asyncio"])
-        assert '"python"' in result
-        assert '"asyncio"*' in result  # last term gets prefix
-
-    def test_no_prefix_option(self):
-        result = _build_fts5_query(["python"], use_prefix=False)
-        assert result == '"python"'
-
-    def test_empty_terms(self):
-        assert _build_fts5_query([]) == ""
-
-    def test_quotes_escaped(self):
-        result = _build_fts5_query(['say "hello"'])
-        assert '""' in result  # double-quotes should be escaped
-
-
-# ── FTS5 OR query building ────────────────────────────────────────
-
-class TestBuildFTS5OrQuery:
-    def test_single_term(self):
-        assert _build_fts5_or_query(["python"]) == '"python"*'
-
-    def test_multiple_terms_joined_with_or(self):
-        result = _build_fts5_or_query(["python", "asyncio"])
-        assert '"python" OR "asyncio"*' == result
-
-    def test_no_prefix_option(self):
-        result = _build_fts5_or_query(["python", "asyncio"], use_prefix=False)
-        assert '"python" OR "asyncio"' == result
-
-    def test_empty_terms(self):
-        assert _build_fts5_or_query([]) == ""
-
-    def test_three_terms(self):
-        result = _build_fts5_or_query(["a", "bb", "cc"])
-        assert result == '"a" OR "bb" OR "cc"*'
-
-
-# ── _execute_fts5 helper ─────────────────────────────────────────
-
-class TestExecuteFTS5:
-    def test_basic_query(self, tmp_db):
-        import sqlite3
-        conn = sqlite3.connect(tmp_db)
-        conn.row_factory = sqlite3.Row
-        rows = _execute_fts5(conn, '"python"*', None, 10)
-        conn.close()
-        assert len(rows) > 0
-
-    def test_with_zim_filter(self, tmp_db):
-        import sqlite3
-        conn = sqlite3.connect(tmp_db)
-        conn.row_factory = sqlite3.Row
-        rows = _execute_fts5(conn, '"python"*', "devdocs", 10)
-        conn.close()
-        # devdocs doesn't have "python" in test data title (only "JavaScript Guide")
-        assert all(row["zim_name"] == "devdocs" for row in rows)
-
-    def test_invalid_query_returns_empty(self, tmp_db):
-        import sqlite3
-        conn = sqlite3.connect(tmp_db)
-        conn.row_factory = sqlite3.Row
-        rows = _execute_fts5(conn, "", None, 10)
-        conn.close()
-        assert rows == []
-
-
-# ── Search execution against test DB ───────────────────────────────
+# ── Search execution against test DB ───────────────────────────────────
 
 class TestSearchSync:
     def test_basic_search(self, tmp_db):
@@ -172,23 +51,27 @@ class TestSearchSync:
             assert r.zim_name == "devdocs"
 
     def test_synonym_expansion_js(self, tmp_db):
-        """Searching 'javascript' should find JS content, and 'js' should expand."""
-        # Direct search for javascript should work
-        results = search_sync("javascript guide", db_path=tmp_db)
+        """Searching 'js' should find JavaScript content via synonym expansion."""
+        results = search_sync("js guide", db_path=tmp_db)
         titles = [r.title.lower() for r in results]
         assert any("javascript" in t for t in titles)
 
-        # The synonym expansion ensures 'js' adds 'javascript' to the query terms
-        from offline_search.search_engine import _expand_synonyms
-        expanded = _expand_synonyms(["js"])
-        assert "javascript" in expanded
+    def test_synonym_expansion_py(self, tmp_db):
+        """Searching 'py' should find Python content via synonym expansion."""
+        results = search_sync("py tutorial", db_path=tmp_db)
+        titles = [r.title.lower() for r in results]
+        assert any("python" in t for t in titles)
 
     def test_or_fallback_partial_match(self, tmp_db):
         """Multi-term query where not all terms exist should still return
         results via OR fallback instead of nothing."""
-        # "python" exists but "xyzzynonexistent" does not — AND will fail,
-        # OR should find python docs
         results = search_sync("python xyzzynonexistent", db_path=tmp_db)
+        assert len(results) > 0
+        assert any("python" in r.title.lower() for r in results)
+
+    def test_stop_words_do_not_break_search(self, tmp_db):
+        """Queries with stop words should still find results (stop words filtered)."""
+        results = search_sync("how to use python for data", db_path=tmp_db)
         assert len(results) > 0
         assert any("python" in r.title.lower() for r in results)
 
@@ -213,7 +96,8 @@ class TestSearchResult:
             title="Test", url="https://example.com/page", snippet="",
             zim_name="ext", namespace="W",
         )
-        assert r.format_full_url("http://localhost:8081") == "https://example.com/page"
+        assert r.format_full_url(
+            "http://localhost:8081") == "https://example.com/page"
 
     def test_format_for_llm(self):
         r = SearchResult(
@@ -270,7 +154,8 @@ class TestSearchAsync:
         sync_results = search_sync("python", db_path=tmp_db)
         async_results = await search("python", db_path=tmp_db)
         assert len(async_results) == len(sync_results)
-        assert [r.title for r in async_results] == [r.title for r in sync_results]
+        assert [r.title for r in async_results] == [
+            r.title for r in sync_results]
 
     async def test_async_search_no_results(self, tmp_path):
         from offline_search.search_engine import search
@@ -298,7 +183,7 @@ class TestSearchEdgeCases:
     def test_unicode_query(self, tmp_db):
         """Unicode characters in the query should not crash."""
         results = search_sync("données françaises 日本語", db_path=tmp_db)
-        assert isinstance(results, list)  # may be empty, but should not raise
+        assert isinstance(results, list)
 
     def test_special_fts5_chars_in_query(self, tmp_db):
         """FTS5 special characters should be handled gracefully."""

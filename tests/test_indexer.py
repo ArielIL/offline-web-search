@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from offline_search.indexer import (
-    _table_exists,
     get_index_stats,
     index_html_page,
     index_zim,
@@ -23,8 +20,14 @@ class TestPrepareDatabase:
     def test_creates_tables(self, tmp_path):
         db_path = tmp_path / "new_index.sqlite"
         conn = prepare_database(db_path, reset=True)
-        assert _table_exists(conn, "documents")
-        assert _table_exists(conn, "metadata")
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "documents" in tables
+        assert "metadata" in tables
         conn.close()
 
     def test_reset_clears_data(self, tmp_path):
@@ -70,8 +73,11 @@ class TestIndexHtmlPage:
         db_path = tmp_path / "idx.sqlite"
         conn = prepare_database(db_path, reset=True)
         docid = index_html_page(
-            conn, title="Test", content="Hello world",
-            url="http://example.com", source_name="test",
+            conn,
+            title="Test",
+            content="Hello world",
+            url="http://example.com",
+            source_name="test",
         )
         assert isinstance(docid, int)
         assert docid > 0
@@ -99,11 +105,16 @@ class TestRemoveByUrl:
     def test_removes_matching(self, tmp_path):
         db_path = tmp_path / "idx.sqlite"
         conn = prepare_database(db_path, reset=True)
-        index_html_page(conn, title="A", content="c", url="http://a.com", source_name="t")
-        index_html_page(conn, title="B", content="c", url="http://b.com", source_name="t")
+        index_html_page(
+            conn, title="A", content="c", url="http://a.com", source_name="t"
+        )
+        index_html_page(
+            conn, title="B", content="c", url="http://b.com", source_name="t"
+        )
         deleted = remove_by_url(conn, "http://a.com")
         assert deleted == 1
-        remaining = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        remaining = conn.execute(
+            "SELECT COUNT(*) FROM documents").fetchone()[0]
         assert remaining == 1
         conn.close()
 
@@ -145,8 +156,18 @@ class TestIndexZim:
         conn = prepare_database(db_path, reset=True)
 
         fake_articles = [
-            {"namespace": "A", "url": "page1", "title": "Page 1", "content": "Content one"},
-            {"namespace": "A", "url": "page2", "title": "Page 2", "content": "Content two"},
+            {
+                "namespace": "A",
+                "url": "page1",
+                "title": "Page 1",
+                "content": "Content one",
+            },
+            {
+                "namespace": "A",
+                "url": "page2",
+                "title": "Page 2",
+                "content": "Content two",
+            },
         ]
 
         with patch("offline_search.indexer.iter_articles", return_value=fake_articles):
@@ -156,7 +177,8 @@ class TestIndexZim:
         count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
         assert count == 2
         # Metadata should also be populated
-        meta_count = conn.execute("SELECT COUNT(*) FROM metadata").fetchone()[0]
+        meta_count = conn.execute(
+            "SELECT COUNT(*) FROM metadata").fetchone()[0]
         assert meta_count == 2
         conn.close()
 
@@ -176,7 +198,12 @@ class TestIndexZim:
         conn = prepare_database(db_path, reset=True)
 
         fake_articles = [
-            {"namespace": "A", "url": f"page{i}", "title": f"Page {i}", "content": f"Content {i}"}
+            {
+                "namespace": "A",
+                "url": f"page{i}",
+                "title": f"Page {i}",
+                "content": f"Content {i}",
+            }
             for i in range(105)
         ]
 
