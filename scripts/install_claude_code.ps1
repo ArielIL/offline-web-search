@@ -29,10 +29,10 @@ Write-Host ""
 if (-not $Mode) {
     Write-Host "Choose installation mode:"
     Write-Host ""
-    Write-Host "  1) skill  — Claude Code skill (recommended)"         -ForegroundColor White
+    Write-Host "  1) skill  - Claude Code skill (recommended)"         -ForegroundColor White
     Write-Host "     Claude runs search via Bash scripts. No background server." -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  2) mcp    — MCP server"                               -ForegroundColor White
+    Write-Host "  2) mcp    - MCP server"                               -ForegroundColor White
     Write-Host "     Registers an MCP server that exposes google_search + visit_page tools." -ForegroundColor Gray
     Write-Host ""
     $choice = Read-Host "Enter 1 or 2 [1]"
@@ -53,7 +53,7 @@ switch ($Mode) {
         Write-Host "[OK] Skill installed to $skillDst" -ForegroundColor Green
         Write-Host ""
         Write-Host "Claude Code now has:" -ForegroundColor White
-        Write-Host "  /offline-search <query>  — search offline docs" -ForegroundColor Gray
+        Write-Host "  /offline-search [query]  - search offline docs" -ForegroundColor Gray
         Write-Host "  Auto-triggers when Claude needs to look something up" -ForegroundColor Gray
     }
     "mcp" {

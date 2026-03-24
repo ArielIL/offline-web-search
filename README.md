@@ -11,8 +11,9 @@ It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Ov
 ```mermaid
 graph LR
     subgraph "Option A: Claude Code Skill"
-        CC1[Claude Code] -->|Bash| S1[skills/search.py]
-        CC1 -->|Bash| S2[skills/fetch_page.py]
+        CC1[Claude Code] -->|"/offline-search"| HA[Haiku Sub-Agent]
+        HA -->|Bash| S1[skills/search.py]
+        HA -->|Bash| S2[skills/fetch_page.py]
         S1 --> SE[search_engine.py]
         S2 --> K1[kiwix-serve]
     end
@@ -35,6 +36,7 @@ graph LR
 - **Distributed ready** — run the heavy ZIM server centrally, connect lightweight clients over the network
 - **Content management API** — index custom HTML pages, crawl internal sites, manage the index via REST
 - **Extensible** — inject content from Confluence, Artifactory, or any other source
+- **Token-efficient** — Haiku sub-agent summarises raw results before returning to main model; optional compact format reduces MCP output tokens
 
 ## Quick Start
 
@@ -159,13 +161,17 @@ For detailed deployment instructions (including distributed mode), see [DEPLOYME
 src/offline_search/
 ├── config.py          # Centralised settings (env vars, .env, defaults)
 ├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
+├── formatter.py       # Result formatting (standard + compact output modes)
 ├── kiwix.py           # Kiwix-serve lifecycle + page fetching → Markdown
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
 └── server.py          # FastAPI HTTP API + content management endpoints
 
+.claude/agents/
+└── offline-search-agent.md  # Haiku sub-agent for token-efficient search
+
 skills/offline-search/
-├── SKILL.md           # Claude Code skill definition
+├── SKILL.md           # Claude Code skill definition (routes through sub-agent)
 └── scripts/
     ├── search.py      # CLI: search the index, print results
     └── fetch_page.py  # CLI: fetch a page, print Markdown
@@ -205,6 +211,7 @@ All settings support environment variable overrides (prefix: `OFFLINE_SEARCH_`):
 | `OFFLINE_SEARCH_KIWIX_PORT` | `8081` | Kiwix-serve port |
 | `OFFLINE_SEARCH_SERVER_PORT` | `8082` | HTTP API port |
 | `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for remote mode |
+| `OFFLINE_SEARCH_COMPACT_FORMAT` | `false` | Use compact output for MCP tools (reduces tokens) |
 
 Or create a `.env` file at the project root.
 
