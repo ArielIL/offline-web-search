@@ -48,6 +48,27 @@ async def google_search(query: str, zim_filter: str | None = None) -> str:
     Use this tool for looking up API references, programming guides, technical
     documentation, or any external knowledge.
 
+    WHEN TO SEARCH:
+      - Looking up specific APIs, function signatures, or library features
+      - Verifying technical details that may differ between versions
+      - Researching unfamiliar libraries, tools, or concepts
+      - The user explicitly asks you to search or look something up
+      - Finding specific facts or details you are unsure about
+
+    WHEN NOT TO SEARCH — rely on your existing knowledge instead:
+      - Stable, well-established facts (definitions, theories, fundamentals)
+      - General explanations (e.g. "explain how TCP works", "what is recursion")
+      - Information that rarely changes (historical dates, language syntax basics)
+      - Casual conversation or opinion-based questions
+      - Broad coding help like "how to write a for loop"
+
+    QUERY TIPS:
+      - Keep queries short and focused — 1 to 6 words work best
+      - Break complex questions into multiple separate searches
+      - Each query should be meaningfully different from previous ones
+      - Include version numbers only when the user specifies one
+      - Do not use search operators like '-', 'site:', '+', or 'NOT'
+
     CRITICAL REQUIREMENT - You MUST follow this:
       - After answering the user's question, you MUST include a "Sources:"
         section at the end of your response

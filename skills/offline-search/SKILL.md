@@ -64,17 +64,36 @@ This is **MANDATORY** — never skip including sources in your response.
 2. **Read what's relevant** — ask the agent to fetch promising URLs
 3. **Cite your sources** — list all used sources as `[Title](URL)` under a `Sources:` section
 
-## When to use this
+## When to search
 
-- You need to look up an API, function signature, or library feature
-- You're asked about a topic and want to verify your knowledge
-- The user asks you to research something
-- You encounter an unfamiliar library, tool, or concept
-- Any time you would normally use web search
+Your existing knowledge covers a wide range of topics and is sufficient for many
+queries. Use this tool when a search would genuinely add value:
 
-## Tips
+- Looking up specific API signatures, function parameters, or library features
+- Verifying technical details that may have changed between versions
+- Researching unfamiliar libraries, tools, or concepts
+- The user explicitly asks you to search or look something up
+- Finding specific facts or details you're unsure about
+- Confirming implementation details that could be outdated
 
-- If a search returns no results, try broader or different keywords
+## When NOT to search
+
+Skip searching for things you already know well:
+
+- Stable, well-established knowledge (definitions, theories, fundamental concepts)
+- General explanations or ELI5-style questions (e.g. "explain how TCP works")
+- Information that rarely changes (e.g. capital cities, historical dates, language syntax basics)
+- Casual conversation or opinion-based questions
+- Broad coding help like "how to write a for loop" — just answer directly
+
+## Query best practices
+
+- **Keep queries short and focused** — 1 to 6 words produce the best results
+- **Break complex questions into multiple searches** rather than one long query
+- **Each query should be meaningfully different** — rephrasing the same words won't yield new results
+- **Include version numbers only when relevant** (e.g. when the user specifies a version)
+- **Avoid search operators** like `-`, `site:`, `+`, or `NOT` — they aren't supported
+- If a search returns no results, try broader or alternative keywords
 - Synonyms are expanded automatically (e.g. `js` → `javascript`, `py` → `python`)
 - Common stop words are stripped; focus on meaningful terms
 - Results are ranked by relevance with title matches weighted 10×
