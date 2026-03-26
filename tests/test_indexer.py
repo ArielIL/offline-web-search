@@ -13,6 +13,7 @@ from offline_search.indexer import (
     load_library,
     prepare_database,
     remove_by_url,
+    remove_by_zim_path,
 )
 
 
@@ -124,6 +125,74 @@ class TestRemoveByUrl:
         index_html_page(conn, title="A", content="c", url="http://a.com")
         deleted = remove_by_url(conn, "http://nonexistent.com")
         assert deleted == 0
+        conn.close()
+
+
+class TestRemoveByZimPath:
+    def test_removes_matching_documents(self, tmp_path):
+        """Documents associated with a given zim_path should be removed."""
+        db_path = tmp_path / "idx.sqlite"
+        conn = prepare_database(db_path, reset=True)
+        # Insert two docs from different ZIM paths
+        cur = conn.execute(
+            "INSERT INTO documents (title, content, zim_name, namespace, url) "
+            "VALUES ('A', 'content a', 'zim_a', 'A', 'ua')"
+        )
+        conn.execute("INSERT INTO metadata (docid, zim_path) VALUES (?, '/path/a.zim')", (cur.lastrowid,))
+        cur = conn.execute(
+            "INSERT INTO documents (title, content, zim_name, namespace, url) "
+            "VALUES ('B', 'content b', 'zim_b', 'A', 'ub')"
+        )
+        conn.execute("INSERT INTO metadata (docid, zim_path) VALUES (?, '/path/b.zim')", (cur.lastrowid,))
+        conn.commit()
+
+        removed = remove_by_zim_path(conn, "/path/a.zim")
+        assert removed == 1
+
+        # Only B should remain
+        count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        assert count == 1
+        title = conn.execute("SELECT title FROM documents").fetchone()[0]
+        assert title == "B"
+
+        # Metadata for A should also be gone
+        meta = conn.execute("SELECT COUNT(*) FROM metadata WHERE zim_path = '/path/a.zim'").fetchone()[0]
+        assert meta == 0
+        conn.close()
+
+    def test_removes_nothing_when_no_match(self, tmp_path):
+        db_path = tmp_path / "idx.sqlite"
+        conn = prepare_database(db_path, reset=True)
+        cur = conn.execute(
+            "INSERT INTO documents (title, content, zim_name, namespace, url) "
+            "VALUES ('A', 'c', 'z', 'A', 'u')"
+        )
+        conn.execute("INSERT INTO metadata (docid, zim_path) VALUES (?, '/path/a.zim')", (cur.lastrowid,))
+        conn.commit()
+
+        removed = remove_by_zim_path(conn, "/path/nonexistent.zim")
+        assert removed == 0
+        count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        assert count == 1
+        conn.close()
+
+    def test_removes_multiple_documents(self, tmp_path):
+        """All documents from the same ZIM should be removed in one call."""
+        db_path = tmp_path / "idx.sqlite"
+        conn = prepare_database(db_path, reset=True)
+        for i in range(5):
+            cur = conn.execute(
+                "INSERT INTO documents (title, content, zim_name, namespace, url) "
+                "VALUES (?, ?, 'zim', 'A', ?)",
+                (f"Title {i}", f"Content {i}", f"url{i}"),
+            )
+            conn.execute("INSERT INTO metadata (docid, zim_path) VALUES (?, '/path/target.zim')", (cur.lastrowid,))
+        conn.commit()
+
+        removed = remove_by_zim_path(conn, "/path/target.zim")
+        assert removed == 5
+        count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        assert count == 0
         conn.close()
 
 

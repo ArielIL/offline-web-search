@@ -36,6 +36,26 @@ def _detect_base_dir() -> Path:
     return Path.cwd()
 
 
+def _detect_kiwix_manage() -> str:
+    """Best-effort auto-detection of the kiwix-manage binary."""
+    is_windows = platform.system() == "Windows"
+    bin_name = "kiwix-manage.exe" if is_windows else "kiwix-manage"
+
+    base = _detect_base_dir()
+    local = base / "kiwix-tools" / bin_name
+    if local.exists():
+        return str(local)
+    sibling = base.parent / "kiwix-tools" / bin_name
+    if sibling.exists():
+        return str(sibling)
+
+    found = shutil.which("kiwix-manage")
+    if found:
+        return found
+
+    return bin_name
+
+
 def _detect_kiwix_exe() -> str:
     """Best-effort auto-detection of the kiwix-serve binary."""
     is_windows = platform.system() == "Windows"
@@ -95,7 +115,15 @@ class Settings(BaseSettings):
 
     # --- Kiwix ---
     kiwix_exe: str = _detect_kiwix_exe()
+    kiwix_manage: str = _detect_kiwix_manage()
     kiwix_port: int = 8081
+
+    # --- ZIM management ---
+    zim_dir: Path = _detect_base_dir() / "zims"
+    upload_max_size_gb: float = 20
+    catalog_url: str = "https://library.kiwix.org/catalog/search"
+    manifest_path: Path = _detect_base_dir() / "data" / "zim_manifest.json"
+    api_key: str = ""
 
     # --- Search API server ---
     server_host: str = "0.0.0.0"

@@ -34,6 +34,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
     "markdownify>=0.14.1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.urls]
@@ -54,6 +55,8 @@ dev = [
 offline-search-mcp     = "offline_search.mcp:main"
 offline-search-server  = "offline_search.server:main"
 offline-search-index   = "offline_search.indexer:main"
+offline-search-update  = "offline_search.updater:main"
+offline-search-catalog = "offline_search.catalog:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/offline_search"]
