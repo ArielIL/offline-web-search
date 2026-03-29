@@ -175,6 +175,33 @@ def compare_versions(
     return updates
 
 
+def check_updates_for_installed(
+    installed: list[ZimInfo],
+    *,
+    catalog_url: str | None = None,
+    verify_tls: bool = True,
+) -> list[UpdateAvailable]:
+    """Query the catalog per installed ZIM and return available updates.
+
+    Instead of a single parameterless fetch (which only returns the first page
+    of ~50 results), this queries the catalog individually for each installed
+    ZIM's base_name, ensuring updates are found even if they've fallen off
+    the first page.
+    """
+    updates: list[UpdateAvailable] = []
+    for zim in installed:
+        entries = fetch_catalog(
+            query=zim.base_name,
+            catalog_url=catalog_url,
+            verify_tls=verify_tls,
+        )
+        for entry in entries:
+            if entry.name == zim.base_name and entry.version > zim.version:
+                updates.append(UpdateAvailable(installed=zim, available=entry))
+                break
+    return updates
+
+
 # ---------------------------------------------------------------------------
 # Download & integrity
 # ---------------------------------------------------------------------------
@@ -333,9 +360,12 @@ def _watch_tick(config: WatchConfig, manifest_path: Path) -> None:
     else:
         installed = []
 
-    # Fetch catalog
-    catalog = fetch_catalog(catalog_url=config.catalog_url, verify_tls=config.verify_tls)
-    updates = compare_versions(installed, catalog)
+    # Fetch catalog per installed ZIM (avoids first-page truncation)
+    updates = check_updates_for_installed(
+        installed,
+        catalog_url=config.catalog_url,
+        verify_tls=config.verify_tls,
+    )
 
     if not updates:
         logger.info("No updates available.")
@@ -439,8 +469,7 @@ def main() -> None:
             installed = get_installed_zims()
 
         catalog_url = getattr(args, "catalog_url", None)
-        catalog = fetch_catalog(catalog_url=catalog_url)
-        updates = compare_versions(installed, catalog)
+        updates = check_updates_for_installed(installed, catalog_url=catalog_url)
 
         if not updates:
             print("All ZIMs are up to date.")
@@ -480,8 +509,7 @@ def main() -> None:
             installed = get_installed_zims()
 
         catalog_url = getattr(args, "catalog_url", None)
-        catalog = fetch_catalog(catalog_url=catalog_url)
-        updates = compare_versions(installed, catalog)
+        updates = check_updates_for_installed(installed, catalog_url=catalog_url)
 
         if not updates:
             print("All ZIMs are up to date.")
