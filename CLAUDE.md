@@ -35,14 +35,14 @@ src/offline_search/
 ## Key Commands
 
 ```bash
-# Install the project (editable mode for development)
-pip install -e ".[dev]"
+# Install the project
+uv sync --all-extras
 
 # Run tests
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run tests with coverage
-pytest tests/ --cov=offline_search --cov-report=term-missing
+uv run pytest tests/ --cov=offline_search --cov-report=term-missing
 
 # Build the search index from ZIM files
 offline-search-index --library path/to/library.xml --output data/offline_index.sqlite
