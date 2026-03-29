@@ -8,6 +8,10 @@ It indexes [Kiwix](https://kiwix.org/) ZIM archives (offline Wikipedia, Stack Ov
 - **Claude Code skill** — for the Claude Code CLI
 - **HTTP API** — for distributed / multi-machine deployments
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Offline Search demo" width="600">
+</p>
+
 ```mermaid
 graph LR
     subgraph "Option A: Claude Code Skill"
