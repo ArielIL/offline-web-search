@@ -166,9 +166,10 @@ class TestCheckUpdatesForInstalled:
         A parameterless call returns nothing — simulating the real catalog's
         first-page truncation that caused the original bug.
         """
-        def fake_fetch(query=None, *, catalog_url=None, verify_tls=True, timeout=30.0):
-            if query and query in catalog:
-                return [catalog[query]]
+        def fake_fetch(query=None, *, name=None, catalog_url=None, verify_tls=True, timeout=30.0):
+            key = name or query
+            if key and key in catalog:
+                return [catalog[key]]
             return []
         return fake_fetch
 
