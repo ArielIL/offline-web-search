@@ -118,6 +118,32 @@ offline-search-index --library data/library.xml --output data/offline_index.sqli
 ```
 </details>
 
+### 2b. Crawl any website (optional)
+
+Don't see a pre-built ZIM for the docs you need? Use the **zimit skill** to crawl
+any website and package it as a ZIM — requires [Docker](https://docs.docker.com/get-docker/).
+
+**Example: make the Claude Code docs searchable offline**
+
+```bash
+bash skills/zimit/scripts/zimit.sh https://code.claude.com/docs \
+  --name claude_code_docs --limit 10 --ingest
+```
+
+This crawls the site (using a real browser via [Zimit](https://github.com/openzim/zimit)),
+creates a ZIM archive, and ingests it into the search index — all in one command.
+Even with `--limit 10`, Next.js sites like this one load content for all pages via
+React Server Components, so the full docs end up indexed (239 articles in this case).
+
+```bash
+# Verify it works
+uv run python skills/offline-search/scripts/search.py "claude code hooks"
+# → returns results from the offline Claude Code docs
+```
+
+Other good candidates: internal wikis, Confluence spaces, Docusaurus sites,
+API docs — anything with a URL.
+
 ### 3. Use with Claude Code (Recommended)
 
 **Option A: Install skills with npx** (easiest)
