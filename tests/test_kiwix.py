@@ -10,8 +10,11 @@ from unittest.mock import MagicMock, patch
 from offline_search.kiwix import (
     html_to_markdown,
     is_port_open,
+    restart_kiwix_server,
     start_kiwix_server,
+    stop_kiwix_server,
 )
+import offline_search.kiwix as kiwix_mod
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +111,60 @@ class TestStartKiwixServer:
             assert start_kiwix_server(
                 exe="kiwix-serve", port=8081, library_xml="lib.xml", timeout=2.0,
             ) is False
+
+
+# ---------------------------------------------------------------------------
+# stop_kiwix_server
+# ---------------------------------------------------------------------------
+
+class TestStopKiwixServer:
+    def test_stop_when_no_process(self):
+        """Stopping when nothing is running should return True."""
+        kiwix_mod._kiwix_process = None
+        assert stop_kiwix_server() is True
+
+    def test_stop_running_process(self):
+        """Terminate a running process."""
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        kiwix_mod._kiwix_process = mock_proc
+
+        assert stop_kiwix_server() is True
+        mock_proc.terminate.assert_called_once()
+        mock_proc.wait.assert_called_once()
+        assert kiwix_mod._kiwix_process is None
+
+    def test_stop_kills_on_timeout(self):
+        """If terminate times out, kill should be called."""
+        import subprocess as sp
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mock_proc.wait.side_effect = [sp.TimeoutExpired("kiwix-serve", 5), None]
+        kiwix_mod._kiwix_process = mock_proc
+
+        assert stop_kiwix_server() is True
+        mock_proc.kill.assert_called_once()
+        assert kiwix_mod._kiwix_process is None
+
+
+# ---------------------------------------------------------------------------
+# restart_kiwix_server
+# ---------------------------------------------------------------------------
+
+class TestRestartKiwixServer:
+    def test_restart_calls_stop_then_start(self):
+        """Restart should stop first, then start."""
+        with (
+            patch("offline_search.kiwix.stop_kiwix_server", return_value=True) as mock_stop,
+            patch("offline_search.kiwix.start_kiwix_server", return_value=True) as mock_start,
+            patch("offline_search.kiwix.time.sleep"),
+        ):
+            result = restart_kiwix_server(
+                exe="kiwix-serve", port=8081, library_xml="lib.xml",
+            )
+            assert result is True
+            mock_stop.assert_called_once()
+            mock_start.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

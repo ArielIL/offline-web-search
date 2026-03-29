@@ -211,6 +211,108 @@ class TestCrawlEndpoint:
         assert data["pages_indexed"] >= 1
 
 
+class TestZimListEndpoint:
+    """The /zim/list and /zim/manifest endpoints are public (no auth)."""
+
+    def test_zim_list(self, client):
+        with patch("offline_search.server.get_installed_zims", return_value=[]):
+            resp = client.get("/zim/list")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_zim_manifest(self, client):
+        with patch("offline_search.server.export_manifest", return_value=[]):
+            resp = client.get("/zim/manifest")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+
+class TestZimAuthEnforcement:
+    """Mutation endpoints must enforce API key auth."""
+
+    def test_upload_without_key_configured_returns_403(self, client, monkeypatch):
+        """When no API key is configured, mutations are disabled."""
+        monkeypatch.setattr(settings, "api_key", "")
+        resp = client.post("/zim/upload", files={"file": ("t.zim", b"x", "application/octet-stream")})
+        assert resp.status_code == 403
+
+    def test_upload_without_auth_header_returns_401(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "test-secret")
+        resp = client.post("/zim/upload", files={"file": ("t.zim", b"x", "application/octet-stream")})
+        assert resp.status_code == 401
+
+    def test_upload_with_wrong_key_returns_401(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "test-secret")
+        resp = client.post(
+            "/zim/upload",
+            files={"file": ("t.zim", b"x", "application/octet-stream")},
+            headers={"Authorization": "Bearer wrong-key"},
+        )
+        assert resp.status_code == 401
+
+    def test_ingest_without_key_returns_403(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "")
+        resp = client.post("/zim/ingest", json={"zim_path": "/fake.zim"})
+        assert resp.status_code == 403
+
+    def test_delete_without_key_returns_403(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "")
+        resp = client.delete("/zim/test.zim")
+        assert resp.status_code == 403
+
+
+class TestZimUploadValidation:
+    """Upload endpoint validates file extension and magic bytes."""
+
+    def _auth_headers(self):
+        return {"Authorization": "Bearer test-secret"}
+
+    def test_rejects_non_zim_extension(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "test-secret")
+        resp = client.post(
+            "/zim/upload",
+            files={"file": ("test.txt", b"\x44\x49\x4d\x04" + b"\x00" * 100, "application/octet-stream")},
+            headers=self._auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "extension" in resp.json()["detail"].lower()
+
+    def test_rejects_bad_magic_bytes(self, client, monkeypatch):
+        monkeypatch.setattr(settings, "api_key", "test-secret")
+        resp = client.post(
+            "/zim/upload",
+            files={"file": ("test_2025-01.zim", b"\x00\x00\x00\x00" + b"\x00" * 100, "application/octet-stream")},
+            headers=self._auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "magic" in resp.json()["detail"].lower()
+
+    def test_accepts_valid_upload(self, client, monkeypatch, tmp_path):
+        """Valid ZIM upload triggers the ingest pipeline."""
+        monkeypatch.setattr(settings, "api_key", "test-secret")
+        monkeypatch.setattr(settings, "zim_dir", tmp_path / "zims")
+
+        from offline_search.updater import IngestResult, ZimInfo
+        mock_result = IngestResult(
+            success=True,
+            zim_info=ZimInfo("test_en", "2025-01", "test_en_2025-01.zim", tmp_path / "test_en_2025-01.zim", 42),
+            articles_indexed=42,
+        )
+
+        content = b"\x44\x49\x4d\x04" + b"\x00" * 100
+        with patch("offline_search.server.ingest_zim", return_value=mock_result):
+            resp = client.post(
+                "/zim/upload",
+                files={"file": ("test_en_2025-01.zim", content, "application/octet-stream")},
+                headers=self._auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["articles_indexed"] == 42
+
+
 class TestServerMain:
     """Smoke test for the server CLI entry point."""
 

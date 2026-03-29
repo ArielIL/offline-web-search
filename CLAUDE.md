@@ -17,10 +17,12 @@ src/offline_search/
 ├── config.py          # Centralised settings (pydantic-settings, .env support)
 ├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
 ├── formatter.py       # Result formatting (standard + compact output modes)
-├── kiwix.py           # Kiwix-serve lifecycle + page fetching
+├── kiwix.py           # Kiwix-serve lifecycle (start/stop/restart) + page fetching
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
-└── server.py          # FastAPI HTTP search API + content management
+├── server.py          # FastAPI HTTP API + content management + ZIM upload endpoints
+├── updater.py         # Server-side ZIM management — zero-downtime ingest pipeline
+└── catalog.py         # Online Kiwix catalog client — check/download/push updates
 
 .claude/agents/
 └── offline-search-agent.md  # Haiku sub-agent for token-efficient search
@@ -53,6 +55,19 @@ offline-search-server
 
 # Start MCP in explicit remote mode
 OFFLINE_SEARCH_REMOTE_HOST=192.168.1.50 offline-search-mcp
+
+# ZIM update management (server-side)
+offline-search-update ingest path/to/new.zim     # Zero-downtime ingest
+offline-search-update list                        # List installed ZIMs
+offline-search-update remove filename.zim         # Remove a ZIM
+offline-search-update manifest                    # Export JSON manifest
+
+# Catalog client (online machine)
+offline-search-catalog check --manifest m.json    # Check for updates
+offline-search-catalog search python              # Search the Kiwix catalog
+offline-search-catalog download devdocs_python    # Download a ZIM
+offline-search-catalog update --push http://srv:8082 --api-key $KEY  # Download & push
+offline-search-catalog watch --auto-download --interval 24           # Daemon mode
 ```
 
 ## MCP Tools Provided
@@ -74,6 +89,12 @@ All settings can be overridden via environment variables prefixed with `OFFLINE_
 | `OFFLINE_SEARCH_SERVER_PORT` | `8082` | Port for the HTTP API |
 | `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for remote mode |
 | `OFFLINE_SEARCH_COMPACT_FORMAT` | `false` | Use compact output for MCP tools (reduces tokens) |
+| `OFFLINE_SEARCH_ZIM_DIR` | `{base_dir}/zims` | ZIM file storage directory |
+| `OFFLINE_SEARCH_KIWIX_MANAGE` | auto-detect | Path to kiwix-manage binary |
+| `OFFLINE_SEARCH_UPLOAD_MAX_SIZE_GB` | `20` | Max ZIM upload size |
+| `OFFLINE_SEARCH_CATALOG_URL` | `https://library.kiwix.org/catalog/search` | OPDS catalog endpoint |
+| `OFFLINE_SEARCH_MANIFEST_PATH` | `{base_dir}/data/zim_manifest.json` | Manifest file path |
+| `OFFLINE_SEARCH_API_KEY` | `""` (empty = ZIM endpoints disabled) | API key for `/zim/*` mutation endpoints |
 
 Or place them in a `.env` file at the project root.
 

@@ -34,6 +34,9 @@ graph LR
 - **Dual tools** — `google_search` for search + `visit_page` to read full content
 - **Smart ranking** — BM25 with title boosting, synonym expansion, prefix matching, and non-English demotion
 - **Distributed ready** — run the heavy ZIM server centrally, connect lightweight clients over the network
+- **Zero-downtime ZIM updates** — ingest new ZIM versions while old content continues serving; atomic swap when done
+- **Catalog client** — check the Kiwix OPDS catalog for updates, download with SHA-256 verification, push to server or sneakernet
+- **Secure ZIM management** — API key auth on mutation endpoints, magic byte validation, configurable size limits
 - **Content management API** — index custom HTML pages, crawl internal sites, manage the index via REST
 - **Extensible** — inject content from Confluence, Artifactory, or any other source
 - **Token-efficient** — Haiku sub-agent summarises raw results before returning to main model; optional compact format reduces MCP output tokens
@@ -162,10 +165,12 @@ src/offline_search/
 ├── config.py          # Centralised settings (env vars, .env, defaults)
 ├── search_engine.py   # Core FTS5 search: tokeniser, BM25, ranking, filtering
 ├── formatter.py       # Result formatting (standard + compact output modes)
-├── kiwix.py           # Kiwix-serve lifecycle + page fetching → Markdown
+├── kiwix.py           # Kiwix-serve lifecycle (start/stop/restart) + page fetching
 ├── indexer.py         # ZIM → SQLite indexer (CLI: offline-search-index)
 ├── mcp.py             # Unified MCP server — auto-detects local/remote mode
-└── server.py          # FastAPI HTTP API + content management endpoints
+├── server.py          # FastAPI HTTP API + content management + ZIM upload
+├── updater.py         # Server-side ZIM management — zero-downtime ingest pipeline
+└── catalog.py         # Online Kiwix catalog client — check/download/push updates
 
 .claude/agents/
 └── offline-search-agent.md  # Haiku sub-agent for token-efficient search
@@ -191,14 +196,21 @@ scripts/               # Installation helpers (skill or MCP)
 
 When running the server (`offline-search-server`):
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/search?q=...&limit=10&zim=...` | Full-text search |
-| `GET` | `/health` | Health check + index stats |
-| `GET` | `/stats` | Detailed index statistics |
-| `POST` | `/index/page` | Index a single HTML/text page |
-| `POST` | `/index/crawl` | Crawl and index a website |
-| `DELETE` | `/index?url=...` | Remove a document by URL |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/search?q=...&limit=10&zim=...` | No | Full-text search |
+| `GET` | `/health` | No | Health check + index stats |
+| `GET` | `/stats` | No | Detailed index statistics |
+| `POST` | `/index/page` | No | Index a single HTML/text page |
+| `POST` | `/index/crawl` | No | Crawl and index a website |
+| `DELETE` | `/index?url=...` | No | Remove a document by URL |
+| `GET` | `/zim/list` | No | List installed ZIMs with versions |
+| `GET` | `/zim/manifest` | No | Export JSON manifest of installed ZIMs |
+| `POST` | `/zim/upload` | Yes | Upload a ZIM file (validates + zero-downtime ingest) |
+| `POST` | `/zim/ingest` | Yes | Ingest a ZIM file already on disk |
+| `DELETE` | `/zim/{filename}` | Yes | Remove a ZIM from library + index + disk |
+
+**Auth**: Endpoints marked "Yes" require `Authorization: Bearer <key>` header. Set `OFFLINE_SEARCH_API_KEY` to enable; if unset, mutation endpoints return 403 (fail-closed).
 
 ## Configuration
 
@@ -212,8 +224,63 @@ All settings support environment variable overrides (prefix: `OFFLINE_SEARCH_`):
 | `OFFLINE_SEARCH_SERVER_PORT` | `8082` | HTTP API port |
 | `OFFLINE_SEARCH_REMOTE_HOST` | `127.0.0.1` | Server IP for remote mode |
 | `OFFLINE_SEARCH_COMPACT_FORMAT` | `false` | Use compact output for MCP tools (reduces tokens) |
+| `OFFLINE_SEARCH_ZIM_DIR` | `{base_dir}/zims` | ZIM file storage directory |
+| `OFFLINE_SEARCH_KIWIX_MANAGE` | auto-detect | Path to kiwix-manage binary |
+| `OFFLINE_SEARCH_UPLOAD_MAX_SIZE_GB` | `20` | Max ZIM upload size |
+| `OFFLINE_SEARCH_CATALOG_URL` | `https://library.kiwix.org/catalog/search` | Kiwix OPDS catalog endpoint |
+| `OFFLINE_SEARCH_MANIFEST_PATH` | `{base_dir}/data/zim_manifest.json` | Manifest file path |
+| `OFFLINE_SEARCH_API_KEY` | `""` (empty = disabled) | API key for `/zim/*` mutation endpoints |
 
 Or create a `.env` file at the project root.
+
+## ZIM Update Management
+
+Offline Search provides a complete pipeline for keeping ZIM files up to date, from fully manual (sneakernet) to fully automated.
+
+### Zero-Downtime Updates
+
+When ingesting a new version of a ZIM, the old content **continues serving searches** while the new version is being indexed. Once indexing completes, old rows are atomically removed — no downtime window.
+
+```bash
+# Server-side: ingest a new ZIM (auto-detects and replaces older version)
+offline-search-update ingest devdocs_en_python_2026-03.zim
+
+# List installed ZIMs
+offline-search-update list
+
+# Export a manifest for the catalog client
+offline-search-update manifest --output /usb/manifest.json
+```
+
+### Catalog Client
+
+The catalog client runs on an **internet-connected machine** to check for updates:
+
+```bash
+# Check what's available vs. what's installed
+offline-search-catalog check --manifest /usb/manifest.json
+
+# Search the Kiwix catalog
+offline-search-catalog search python
+
+# Download a specific ZIM
+offline-search-catalog download devdocs_en_python --dest /usb/
+
+# Download all updates and push to the air-gapped server
+offline-search-catalog update --push http://server:8082 --api-key $KEY
+
+# Watch mode: check every 24h, auto-download, notify via Slack
+offline-search-catalog watch --auto-download --auto-push http://srv:8082 \
+    --api-key $KEY --notify-command "curl -X POST slack.webhook"
+```
+
+### Update Strategies
+
+| Strategy | Setup | Security |
+|----------|-------|----------|
+| **Sneakernet** | `catalog download` → USB → `update ingest` | Highest — no network path |
+| **Semi-automated** | `watch --auto-download --notify-command send-email.sh` | Human reviews before transfer |
+| **Fully automated** | `watch --auto-download --auto-push` | Convenient; API key required |
 
 ## Testing
 
