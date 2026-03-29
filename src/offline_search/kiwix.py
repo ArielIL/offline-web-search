@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Process management
 # ---------------------------------------------------------------------------
 
+_kiwix_process: subprocess.Popen | None = None
+
+
 def is_port_open(port: int, host: str = "127.0.0.1") -> bool:
     """Return ``True`` if *port* is accepting connections."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -51,8 +54,9 @@ def start_kiwix_server(
         return True
 
     logger.info("Starting kiwix-serve on port %d …", port)
+    global _kiwix_process
     try:
-        subprocess.Popen(
+        _kiwix_process = subprocess.Popen(
             [exe, "--port", str(port), "--library", library_xml],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -75,6 +79,50 @@ def start_kiwix_server(
 
     logger.warning("Kiwix server did not respond within %.1fs", timeout)
     return False
+
+
+def stop_kiwix_server(*, timeout: float = 5.0) -> bool:
+    """Stop the kiwix-serve process started by :func:`start_kiwix_server`.
+
+    Returns ``True`` if the process was stopped (or was not running).
+    """
+    global _kiwix_process
+    if _kiwix_process is None:
+        logger.info("No kiwix-serve process to stop.")
+        return True
+
+    logger.info("Stopping kiwix-serve (pid=%d) …", _kiwix_process.pid)
+    try:
+        _kiwix_process.terminate()
+        _kiwix_process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        logger.warning("kiwix-serve did not stop gracefully, killing …")
+        _kiwix_process.kill()
+        _kiwix_process.wait(timeout=2.0)
+    except Exception:
+        logger.exception("Failed to stop kiwix-serve")
+        return False
+    finally:
+        _kiwix_process = None
+
+    logger.info("kiwix-serve stopped.")
+    return True
+
+
+def restart_kiwix_server(
+    *,
+    exe: str | None = None,
+    port: int | None = None,
+    library_xml: str | None = None,
+    timeout: float = 8.0,
+) -> bool:
+    """Stop and restart kiwix-serve. Returns ``True`` if healthy after restart."""
+    stop_kiwix_server()
+    # Brief pause to release the port
+    time.sleep(0.5)
+    return start_kiwix_server(
+        exe=exe, port=port, library_xml=library_xml, timeout=timeout,
+    )
 
 
 # ---------------------------------------------------------------------------

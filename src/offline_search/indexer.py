@@ -40,7 +40,7 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
         sys.modules["gevent"] = MagicMock()
         sys.modules["gevent.monkey"] = MagicMock()
         sys.modules["gevent.pywsgi"] = MagicMock()
-    
+
     # pkg_resources was removed in python 3.12, zimply uses it for an unused falcon template
     if "pkg_resources" not in sys.modules:
         sys.modules["pkg_resources"] = MagicMock()
@@ -89,7 +89,8 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
                 if limit is not None and processed >= limit:
                     break
             except Exception:
-                logger.debug("Skipping article idx=%d in %s", idx, zim_path, exc_info=True)
+                logger.debug("Skipping article idx=%d in %s",
+                             idx, zim_path, exc_info=True)
     finally:
         zim.close()
 
@@ -161,7 +162,8 @@ def index_zim(
         cursor.execute(
             "INSERT INTO documents (title, content, zim_name, namespace, url) "
             "VALUES (?, ?, ?, ?, ?)",
-            (article["title"], article["content"], zim_name, article["namespace"], article["url"]),
+            (article["title"], article["content"], zim_name,
+             article["namespace"], article["url"]),
         )
         docid = cursor.lastrowid
         cursor.execute(
@@ -196,6 +198,32 @@ def index_html_page(
     )
     conn.commit()
     return cursor.lastrowid  # type: ignore[return-value]
+
+
+def remove_by_zim_path(conn: sqlite3.Connection, zim_path: str) -> int:
+    """Delete all FTS5 documents + metadata rows for a given ZIM path.
+
+    Uses the metadata table to find docids associated with *zim_path*, then
+    removes both the FTS5 rows and the metadata rows in a single transaction.
+    Returns the number of documents removed.
+    """
+    cur = conn.execute(
+        "SELECT docid FROM metadata WHERE zim_path = ?", (zim_path,)
+    )
+    docids = [row[0] for row in cur.fetchall()]
+    if not docids:
+        return 0
+
+    placeholders = ",".join("?" for _ in docids)
+    conn.execute(
+        f"DELETE FROM documents WHERE rowid IN ({placeholders})", docids
+    )
+    conn.execute(
+        f"DELETE FROM metadata WHERE docid IN ({placeholders})", docids
+    )
+    conn.commit()
+    logger.info("Removed %d documents for zim_path=%s", len(docids), zim_path)
+    return len(docids)
 
 
 def remove_by_url(conn: sqlite3.Connection, url: str) -> int:
@@ -250,7 +278,8 @@ def load_library(library_path: Path) -> Iterable[dict[str, Any]]:
 
 def main() -> None:
     """CLI: ``offline-search-index``"""
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO,
+                        format="%(levelname)s: %(message)s")
 
     parser = argparse.ArgumentParser(
         description="Build a local full-text index from ZIM files."
