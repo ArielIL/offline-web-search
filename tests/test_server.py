@@ -299,7 +299,7 @@ class TestZimUploadValidation:
             articles_indexed=42,
         )
 
-        content = b"\x44\x49\x4d\x04" + b"\x00" * 100
+        content = b"\x5a\x49\x4d\x04" + b"\x00" * 100  # ZIM magic: "ZIM\x04"
         with patch("offline_search.server.ingest_zim", return_value=mock_result):
             resp = client.post(
                 "/zim/upload",

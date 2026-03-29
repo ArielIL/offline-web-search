@@ -30,7 +30,7 @@ from .kiwix import restart_kiwix_server
 logger = logging.getLogger(__name__)
 
 # ZIM magic bytes: 0x44 0x49 0x4D 0x04  (ASCII "DIM" + 0x04)
-ZIM_MAGIC = b"\x44\x49\x4d\x04"
+ZIM_MAGIC = b"ZIM\x04"
 
 # Regex to parse versioned ZIM filenames: basename_YYYY-MM
 _VERSION_RE = re.compile(r"^(.+?)_(\d{4}-\d{2})$")
