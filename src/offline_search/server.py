@@ -31,7 +31,7 @@ from .indexer import (
     remove_by_url,
     remove_by_zim_path,
 )
-from .search_engine import SearchResult, search_sync
+from .search_engine import search_sync
 from .updater import (
     ZIM_MAGIC,
     export_manifest,

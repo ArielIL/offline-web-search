@@ -1,6 +1,6 @@
-# Contributing to offline-web-search
+# Contributing to offline-search
 
-First off, thank you for considering contributing! I originally built `offline-web-search` to solve my own bottlenecks with local agentic workflows, and I'm absolutely thrilled to have the community jump in to help make it better.
+First off, thank you for considering contributing! I originally built `offline-search` to solve my own bottlenecks with local agentic workflows, and I'm absolutely thrilled to have the community jump in to help make it better.
 
 Whether it's a bug fix, a new feature, a documentation update, or even just fixing a typo, all contributions are highly appreciated!
 
@@ -8,7 +8,7 @@ Whether it's a bug fix, a new feature, a documentation update, or even just fixi
 
 ### 1. Reporting Bugs and Requesting Features
 
-If you find a bug or have an idea for a feature, please [open an issue](https://github.com/ArielIL/offline-web-search/issues) first.
+If you find a bug or have an idea for a feature, please [open an issue](https://github.com/relz6/offline-search/issues) first.
 
 * **Bugs:** Please include steps to reproduce, the expected behavior, and what actually happened. Logs and environment details (OS, Python version) are incredibly helpful.
 * **Features:** Explain why the feature is needed and how it fits into the broader goal of making this a seamless, offline `Google Search` alternative for LLMs.
@@ -20,8 +20,8 @@ To set up the project locally for development:
 1. **Fork the repository** to your own GitHub account.
 2. **Clone your fork** locally:
 ```bash
-git clone https://github.com/YOUR-USERNAME/offline-web-search.git
-cd offline-web-search
+git clone https://github.com/YOUR-USERNAME/offline-search.git
+cd offline-search
 
 ```
 

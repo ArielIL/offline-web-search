@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from offline_search.indexer import prepare_database
 from offline_search.updater import (
-    IngestResult,
-    ZimInfo,
     ZIM_MAGIC,
     export_manifest,
-    find_older_version,
-    get_installed_zims,
     ingest_zim,
     parse_zim_version,
     validate_zim_file,
@@ -194,8 +190,6 @@ class TestIngestZim:
         conn.commit()
 
         coexistence_verified = False
-
-        original_index_zim = __import__("offline_search.indexer", fromlist=["index_zim"]).index_zim
 
         def spy_index_zim(conn, zim_path, zim_name, **kwargs):
             """During indexing, check that old content is still present."""

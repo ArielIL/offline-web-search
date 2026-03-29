@@ -125,7 +125,6 @@ def _parse_opds_feed(xml_text: str) -> list[CatalogEntry]:
         # Extract name/version from the URL filename or entry ID
         name = ""
         version = ""
-        entry_id = _atom_text(entry_el, "id") or ""
         if url:
             filename_stem = Path(url.split("?")[0]).stem
             try:

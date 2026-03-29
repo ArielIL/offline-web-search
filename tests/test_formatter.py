@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from offline_search.formatter import (
-    NO_RESULTS_MESSAGE,
     SOURCES_REMINDER,
     format_search_result,
     format_search_result_compact,
@@ -88,7 +89,7 @@ class TestLinksJsonIsValid:
                 links = json.loads(json_str)
                 assert isinstance(links, list)
                 assert len(links) == 2
-                assert all("title" in l and "url" in l for l in links)
+                assert all("title" in link and "url" in link for link in links)
                 break
         else:
             pytest.fail("No 'Links: ' line found in output")
@@ -127,7 +128,7 @@ class TestCompactFormat:
                 links = json.loads(line[len("Links: "):])
                 assert isinstance(links, list)
                 assert len(links) == 2
-                assert all("title" in l and "url" in l for l in links)
+                assert all("title" in link and "url" in link for link in links)
                 break
         else:
             assert False, "No 'Links: ' line found in output"

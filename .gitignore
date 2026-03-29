@@ -63,6 +63,13 @@ mcp_config.json
 .env
 .env.local
 
+# Scratch / debug files
+test.py
+test2.py
+*_output.txt
+current_zims.txt
+websearch_internals_research.md
+
 # Claude artifacts
 .claude/
 

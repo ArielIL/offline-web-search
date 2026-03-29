@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +10,6 @@ import pytest
 
 from offline_search.catalog import (
     CatalogEntry,
-    WatchConfig,
     _parse_opds_feed,
     check_updates_for_installed,
     compare_versions,
