@@ -58,3 +58,11 @@ through to the script.
   ```bash
   bash skills/setup/scripts/setup.sh --index-only
   ```
+
+## Known limitations
+
+- **SPA / Next.js sites** — sites that render entirely via JavaScript (e.g. Next.js,
+  Mintlify) will be crawled and indexed successfully, but may not display correctly
+  when browsing through kiwix-serve in a browser. The content is still fully searchable
+  via the offline-search tools. Static-HTML doc sites (DevDocs, Sphinx, MkDocs, Hugo)
+  work best for browser viewing.
