@@ -181,11 +181,20 @@ src/offline_search/
 .claude/agents/
 └── offline-search-agent.md  # Haiku sub-agent for token-efficient search
 
-skills/offline-search/
-├── SKILL.md           # Claude Code skill definition (routes through sub-agent)
-└── scripts/
-    ├── search.py      # CLI: search the index, print results
-    └── fetch_page.py  # CLI: fetch a page, print Markdown
+skills/
+├── offline-search/    # Search skill (routes through Haiku sub-agent)
+│   ├── SKILL.md
+│   └── scripts/
+│       ├── search.py      # CLI: search the index
+│       └── fetch_page.py  # CLI: fetch a page as Markdown
+├── setup/             # Setup skill (install kiwix-tools, download ZIMs, build index)
+│   ├── SKILL.md
+│   └── scripts/
+│       └── setup.sh
+└── zimit/             # Zimit skill (crawl websites → ZIM archives)
+    ├── SKILL.md
+    └── scripts/
+        └── zimit.sh
 
 tests/                 # pytest test suite
 scripts/               # Installation helpers (skill or MCP)
