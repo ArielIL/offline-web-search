@@ -20,8 +20,6 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
-TEXT_NAMESPACES = {"A", "C"}
-
 
 # ---------------------------------------------------------------------------
 # ZIM iteration
@@ -32,67 +30,51 @@ def iter_articles(zim_path: Path, *, limit: int | None = None) -> Iterable[dict[
 
     Each dict has keys: ``namespace``, ``url``, ``title``, ``content``.
     """
-    import sys
-    from unittest.mock import MagicMock
+    from libzim.reader import Archive
 
-    # Prevent zimply from monkeypatching the entire process via gevent
-    if "gevent" not in sys.modules:
-        sys.modules["gevent"] = MagicMock()
-        sys.modules["gevent.monkey"] = MagicMock()
-        sys.modules["gevent.pywsgi"] = MagicMock()
-
-    # pkg_resources was removed in python 3.12, zimply uses it for an unused falcon template
-    if "pkg_resources" not in sys.modules:
-        sys.modules["pkg_resources"] = MagicMock()
-
-    from zimply.zimply import ZIMFile
-
-    zim = ZIMFile(str(zim_path), "utf-8")
+    archive = Archive(str(zim_path))
     processed = 0
-    try:
-        for idx in range(len(zim)):
-            try:
-                entry = zim.read_directory_entry_by_index(idx)
-                namespace = entry.get("namespace")
-                if namespace not in TEXT_NAMESPACES:
-                    continue
 
-                article = zim._get_article_by_index(idx)
-                mimetype = getattr(article, "mimetype", "") or ""
-                if not mimetype.startswith("text"):
-                    continue
+    for idx in range(archive.entry_count):
+        try:
+            entry = archive._get_entry_by_id(idx)
+            if entry.is_redirect:
+                continue
 
-                raw_bytes = article.data or b""
-                if not raw_bytes:
-                    continue
+            item = entry.get_item()
+            mimetype = item.mimetype or ""
+            if not mimetype.startswith("text/html"):
+                continue
 
-                html_text = raw_bytes.decode("utf-8", errors="ignore")
-                soup = BeautifulSoup(html_text, "html.parser")
-                text = soup.get_text("\n", strip=True)
-                if not text:
-                    continue
+            raw_bytes = bytes(item.content)
+            if not raw_bytes:
+                continue
 
-                title = entry.get("title")
-                if not title and soup.title:
-                    title = soup.title.get_text(strip=True)
-                if not title:
-                    title = entry.get("url")
+            html_text = raw_bytes.decode("utf-8", errors="ignore")
+            soup = BeautifulSoup(html_text, "html.parser")
+            text = soup.get_text("\n", strip=True)
+            if not text:
+                continue
 
-                yield {
-                    "namespace": namespace,
-                    "url": entry.get("url"),
-                    "title": title,
-                    "content": text,
-                }
+            title = entry.title
+            if not title and soup.title:
+                title = soup.title.get_text(strip=True)
+            if not title:
+                title = entry.path
 
-                processed += 1
-                if limit is not None and processed >= limit:
-                    break
-            except Exception:
-                logger.debug("Skipping article idx=%d in %s",
-                             idx, zim_path, exc_info=True)
-    finally:
-        zim.close()
+            yield {
+                "namespace": "A",
+                "url": entry.path,
+                "title": title,
+                "content": text,
+            }
+
+            processed += 1
+            if limit is not None and processed >= limit:
+                break
+        except Exception:
+            logger.debug("Skipping entry idx=%d in %s",
+                         idx, zim_path, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
