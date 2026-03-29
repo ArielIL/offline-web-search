@@ -50,84 +50,112 @@ graph LR
 ### 1. Install
 
 ```bash
-pip install -e ".[dev]"
+# Install uv if you don't have it (https://docs.astral.sh/uv/)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install the project and all dependencies
+uv sync --all-extras
 ```
 
-### 2. Prepare your ZIM library
+<details>
+<summary>Alternative: pip</summary>
 
-Offline Search uses **ZIM archives** — compact offline snapshots of websites —
-as its content source.  Four sub-steps:
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
+</details>
 
-#### 2a. Download Kiwix Tools
+### 2. Set up ZIM library
 
-Kiwix Tools provides two binaries you need: `kiwix-serve` (the content server)
-and `kiwix-manage` (the library catalog manager).
+The setup script handles everything — downloads kiwix-tools for your platform,
+fetches ZIM documentation archives, builds the library catalog, and creates the
+search index:
 
-Download the appropriate package for your OS from
-[download.kiwix.org/release/kiwix-tools/](https://download.kiwix.org/release/kiwix-tools/):
+```bash
+# Full setup with specific docs (comma-separated topics)
+bash skills/setup/scripts/setup.sh --zims "python,javascript,bash"
+
+# Just install kiwix-tools (download ZIMs separately later)
+bash skills/setup/scripts/setup.sh --kiwix-only
+
+# Rebuild the index after manually adding ZIMs to data/zims/
+bash skills/setup/scripts/setup.sh --index-only
+```
+
+To browse available ZIMs before choosing:
+
+```bash
+uv run offline-search-catalog search python
+uv run offline-search-catalog search react
+```
+
+<details>
+<summary>Manual setup (step by step)</summary>
+
+#### Download Kiwix Tools
+
+Download from [download.kiwix.org/release/kiwix-tools/](https://download.kiwix.org/release/kiwix-tools/):
 
 | OS | File to download |
 |----|-----------------|
 | Windows 64-bit | `kiwix-tools_win-x86_64-*.zip` |
 | Linux x86_64 | `kiwix-tools_linux-x86_64-*.tar.gz` |
-| macOS | `kiwix-tools_macos-x86_64-*.tar.gz` |
+| macOS x86_64 | `kiwix-tools_macos-x86_64-*.tar.gz` |
+| macOS ARM (Apple Silicon) | `kiwix-tools_macos-arm64-*.tar.gz` |
 
-Extract the archive and either:
-- **Add the folder to your PATH**, or
-- **Place it at `kiwix-tools/`** next to this repo — the tool auto-detects it there
+Extract and place `kiwix-serve` + `kiwix-manage` in `bin/` or on your PATH.
 
-#### 2b. Download ZIM files
+#### Download ZIM files
 
-Browse and download from [download.kiwix.org/zim/](https://download.kiwix.org/zim/):
+Browse [download.kiwix.org/zim/](https://download.kiwix.org/zim/) and place ZIM files in `data/zims/`.
 
-| Content | Download path |
-|---------|---------------|
-| Python docs | `zim/devdocs/devdocs_en_python_*.zim` |
-| JavaScript docs | `zim/devdocs/devdocs_en_javascript_*.zim` |
-| Stack Overflow | `zim/stack_exchange/stackoverflow.com_en_all_*.zim` |
-| Wikipedia (compact) | `zim/wikipedia/wikipedia_en_all_mini_*.zim` |
-| Many more… | `zim/devdocs/`, `zim/stack_exchange/`, … |
-
-Place ZIM files anywhere on disk — a `zims/` folder next to this repo works
-well, but an external drive or network share is fine too.
-
-#### 2c. Build `library.xml`
-
-`library.xml` is a catalog that tells offline-search (and kiwix-serve) which
-ZIM archives you have.  Use the included helper script to scan your ZIM folder
-and register everything at once:
+#### Build library.xml and index
 
 ```bash
-# Linux / macOS
-./scripts/build_library.sh ~/zims
-
-# Windows (PowerShell)
-.\scripts\build_library.ps1 C:\zims
+kiwix-manage data/library.xml add data/zims/your-file.zim
+offline-search-index --library data/library.xml --output data/offline_index.sqlite
 ```
+</details>
 
-Or add individual files by hand if you prefer:
+### 2b. Crawl any website (optional)
+
+Don't see a pre-built ZIM for the docs you need? Use the **zimit skill** to crawl
+any website and package it as a ZIM — requires [Docker](https://docs.docker.com/get-docker/).
+
+**Example: make the Claude Code docs searchable offline**
 
 ```bash
-kiwix-manage library.xml add path/to/python-docs.zim
+bash skills/zimit/scripts/zimit.sh https://code.claude.com/docs \
+  --name claude_code_docs --limit 10 --ingest
 ```
 
-`library.xml` is **machine-specific** (it contains your local file paths) and
-is listed in `.gitignore` — never commit it.
-
-> **Reference:** [`library.xml.example`](library.xml.example) shows the XML
-> format in full if you ever need to inspect or edit the file by hand.
-
-#### 2d. Build the SQLite index
+This crawls the site (using a real browser via [Zimit](https://github.com/openzim/zimit)),
+creates a ZIM archive, and ingests it into the search index — all in one command.
+Even with `--limit 10`, Next.js sites like this one load content for all pages via
+React Server Components, so the full docs end up indexed (239 articles in this case).
 
 ```bash
-offline-search-index --library library.xml --output data/offline_index.sqlite
+# Verify it works
+uv run python skills/offline-search/scripts/search.py "claude code hooks"
+# → returns results from the offline Claude Code docs
 ```
 
-Add `--limit 50` for a quick smoke-test (indexes only 50 articles per ZIM).
+Other good candidates: internal wikis, Confluence spaces, Docusaurus sites,
+API docs — anything with a URL.
 
 ### 3. Use with Claude Code (Recommended)
 
-**Option A: Skill** (no background server needed)
+**Option A: Install skills with npx** (easiest)
+
+```bash
+npx skills add ArielIL/offline-web-search
+```
+
+This installs both the `offline-search` skill (for searching docs) and the
+`setup` skill (for managing ZIM libraries) into your Claude Code environment.
+
+**Option B: Skill** (manual install, no background server needed)
 
 ```bash
 ./scripts/install_claude_code.sh skill     # Linux/macOS
@@ -179,11 +207,20 @@ src/offline_search/
 .claude/agents/
 └── offline-search-agent.md  # Haiku sub-agent for token-efficient search
 
-skills/offline-search/
-├── SKILL.md           # Claude Code skill definition (routes through sub-agent)
-└── scripts/
-    ├── search.py      # CLI: search the index, print results
-    └── fetch_page.py  # CLI: fetch a page, print Markdown
+skills/
+├── offline-search/    # Search skill (routes through Haiku sub-agent)
+│   ├── SKILL.md
+│   └── scripts/
+│       ├── search.py      # CLI: search the index
+│       └── fetch_page.py  # CLI: fetch a page as Markdown
+├── setup/             # Setup skill (install kiwix-tools, download ZIMs, build index)
+│   ├── SKILL.md
+│   └── scripts/
+│       └── setup.sh
+└── zimit/             # Zimit skill (crawl websites → ZIM archives)
+    ├── SKILL.md
+    └── scripts/
+        └── zimit.sh
 
 tests/                 # pytest test suite
 scripts/               # Installation helpers (skill or MCP)
@@ -289,8 +326,8 @@ offline-search-catalog watch --auto-download --auto-push http://srv:8082 \
 ## Testing
 
 ```bash
-pytest tests/ -v
-pytest tests/ --cov=offline_search --cov-report=term-missing
+uv run pytest tests/ -v
+uv run pytest tests/ --cov=offline_search --cov-report=term-missing
 ```
 
 ## Requirements
