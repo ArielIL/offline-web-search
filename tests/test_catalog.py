@@ -13,6 +13,7 @@ from offline_search.catalog import (
     CatalogEntry,
     WatchConfig,
     _parse_opds_feed,
+    check_updates_for_installed,
     compare_versions,
     download_zim,
     export_manifest,
@@ -148,6 +149,89 @@ class TestCompareVersions:
             CatalogEntry("devdocs_python", "2026-01", "Python", "", "url", 0, "en", ""),
         ]
         assert compare_versions(installed, catalog) == []
+
+
+# ---------------------------------------------------------------------------
+# Update checking (bug fix: single-page truncation)
+# ---------------------------------------------------------------------------
+
+class TestCheckUpdatesForInstalled:
+    """check_updates_for_installed must find updates for ALL installed ZIMs,
+    even those that would not appear on the catalog's default first page."""
+
+    def _fake_catalog(self, catalog: dict[str, CatalogEntry]):
+        """Return a fetch_catalog stub backed by a name->entry dict.
+
+        A query matching an entry's name returns that entry.
+        A parameterless call returns nothing — simulating the real catalog's
+        first-page truncation that caused the original bug.
+        """
+        def fake_fetch(query=None, *, name=None, catalog_url=None, verify_tls=True, timeout=30.0):
+            key = name or query
+            if key and key in catalog:
+                return [catalog[key]]
+            return []
+        return fake_fetch
+
+    def test_finds_updates_for_all_installed_zims(self):
+        """Updates are found for every installed ZIM, not just those on page 1."""
+        installed = [
+            ZimInfo("reverseengineering.stackexchange.com_en_all", "2025-12",
+                    "reverseengineering.stackexchange.com_en_all_2025-12.zim", Path("/z")),
+            ZimInfo("devdocs_en_python", "2025-06",
+                    "devdocs_en_python_2025-06.zim", Path("/z")),
+        ]
+        catalog = {
+            "reverseengineering.stackexchange.com_en_all": CatalogEntry(
+                "reverseengineering.stackexchange.com_en_all", "2026-02",
+                "RE Stack Exchange", "", "https://mirror/re_2026-02.zim", 1024, "en", "",
+            ),
+            "devdocs_en_python": CatalogEntry(
+                "devdocs_en_python", "2026-01",
+                "Python DevDocs", "", "https://mirror/devdocs_2026-01.zim", 1024, "en", "",
+            ),
+        }
+
+        with patch("offline_search.catalog.fetch_catalog", side_effect=self._fake_catalog(catalog)):
+            updates = check_updates_for_installed(installed)
+
+        updated_names = {u.installed.base_name for u in updates}
+        assert updated_names == {
+            "reverseengineering.stackexchange.com_en_all",
+            "devdocs_en_python",
+        }
+
+    def test_no_updates_when_all_current(self):
+        installed = [
+            ZimInfo("wiki_en", "2026-01", "wiki_en_2026-01.zim", Path("/z")),
+        ]
+        catalog = {
+            "wiki_en": CatalogEntry("wiki_en", "2026-01", "Wiki", "", "url", 0, "en", ""),
+        }
+
+        with patch("offline_search.catalog.fetch_catalog", side_effect=self._fake_catalog(catalog)):
+            updates = check_updates_for_installed(installed)
+
+        assert updates == []
+
+    def test_mixed_some_updated_some_current(self):
+        """Only ZIMs with newer catalog versions appear in updates."""
+        installed = [
+            ZimInfo("alpha", "2025-01", "alpha_2025-01.zim", Path("/z")),
+            ZimInfo("beta", "2026-01", "beta_2026-01.zim", Path("/z")),
+            ZimInfo("gamma", "2025-06", "gamma_2025-06.zim", Path("/z")),
+        ]
+        catalog = {
+            "alpha": CatalogEntry("alpha", "2026-01", "", "", "url", 0, "en", ""),
+            "beta": CatalogEntry("beta", "2026-01", "", "", "url", 0, "en", ""),   # same
+            "gamma": CatalogEntry("gamma", "2026-02", "", "", "url", 0, "en", ""),
+        }
+
+        with patch("offline_search.catalog.fetch_catalog", side_effect=self._fake_catalog(catalog)):
+            updates = check_updates_for_installed(installed)
+
+        updated_names = {u.installed.base_name for u in updates}
+        assert updated_names == {"alpha", "gamma"}
 
 
 # ---------------------------------------------------------------------------
