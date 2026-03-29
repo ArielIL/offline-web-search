@@ -8,6 +8,9 @@
 #   ./setup.sh --index-only       # Only rebuild the index (assumes ZIMs + library.xml exist)
 set -euo pipefail
 
+_tmpdir=""
+trap 'rm -rf "$_tmpdir"' EXIT
+
 PROJECT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 BIN_DIR="$PROJECT_DIR/bin"
 DATA_DIR="$PROJECT_DIR/data"
@@ -70,16 +73,15 @@ install_kiwix_tools() {
     url="${KIWIX_TOOLS_BASE_URL}${tarball}"
     info "Downloading $url ..."
 
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    _tmpdir="$(mktemp -d)"
 
-    curl -L "$url" -o "$tmpdir/kiwix-tools.tar.gz"
-    tar xzf "$tmpdir/kiwix-tools.tar.gz" -C "$tmpdir"
+    curl -L "$url" -o "$_tmpdir/kiwix-tools.tar.gz"
+    tar xzf "$_tmpdir/kiwix-tools.tar.gz" -C "$_tmpdir"
 
     mkdir -p "$BIN_DIR"
     # The tarball extracts into a named directory
     local extracted
-    extracted="$(find "$tmpdir" -name 'kiwix-serve' -type f | head -1)"
+    extracted="$(find "$_tmpdir" -name 'kiwix-serve' -type f | head -1)"
     [ -n "$extracted" ] || error "kiwix-serve not found in archive"
     local src_dir
     src_dir="$(dirname "$extracted")"
